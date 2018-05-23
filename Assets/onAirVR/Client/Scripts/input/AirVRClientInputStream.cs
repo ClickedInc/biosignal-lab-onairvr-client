@@ -16,7 +16,7 @@ using UnityEngine.Assertions;
 
 public class AirVRClientInputStream : AirVRInputStream {
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern byte onairvr_RegisterInputSender(string name);
+    private static extern byte onairvr_RegisterInputSender(string name, string args);
 
     [DllImport(AirVRClient.LibPluginName)]
     private static extern void onairvr_UnregisterInputSender(byte id);
@@ -54,7 +54,7 @@ public class AirVRClientInputStream : AirVRInputStream {
 
     public override void Init() {
         foreach (var key in senders.Keys) {
-            senders[key].OnRegistered(onairvr_RegisterInputSender(senders[key].name));
+            senders[key].OnRegistered(onairvr_RegisterInputSender(senders[key].name, senders[key].options));
         }
 
         base.Init();
@@ -83,7 +83,7 @@ public class AirVRClientInputStream : AirVRInputStream {
         if (senders.ContainsKey(sender.name) == false) {
             senders.Add(sender.name, sender);
             if (initialized) {
-                sender.OnRegistered(onairvr_RegisterInputSender(sender.name));
+                sender.OnRegistered(onairvr_RegisterInputSender(sender.name, sender.options));
             }
         }
     }

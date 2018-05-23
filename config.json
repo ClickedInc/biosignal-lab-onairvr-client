@@ -1,0 +1,4 @@
+{
+    "MotionDataInputEndpoint": "tcp://192.168.0.20:5555",
+    "UseLoopbackForPredictedMotionOutput": true
+}

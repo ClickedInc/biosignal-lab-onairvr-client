@@ -38,6 +38,10 @@ public abstract class AirVRInputBase {
 }
 
 public abstract class AirVRInputSender : AirVRInputBase {
+    public virtual string options {
+        get { return null; }
+    }
+    
     public abstract void PendInputsPerFrame(AirVRInputStream inputStream);
 }
 

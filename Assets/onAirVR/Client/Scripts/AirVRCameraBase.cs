@@ -13,6 +13,7 @@ using UnityEngine;
 using UnityEngine.Audio;
 using UnityEngine.Rendering;
 using System.Runtime.InteropServices;
+using UnityEngine.XR;
 using UnityEngine.Assertions;
 
 public abstract class AirVRCameraBase : MonoBehaviour {
@@ -79,7 +80,37 @@ public abstract class AirVRCameraBase : MonoBehaviour {
             inputStream.PendTransform(this, (byte)AirVRHeadTrackerKey.Transform, _cameraTransform.localPosition, _cameraTransform.localRotation);
         }
     }
-    
+
+    private class PredictedHeadTrackerInputDevice : AirVRInputDevice {
+        public PredictedHeadTrackerInputDevice(Transform cameraTransform) {
+            _cameraTransform = cameraTransform;
+        }
+
+        private Transform _cameraTransform;
+
+        // implements AirVRInputDevice
+        protected override string deviceName {
+            get {
+                return AirVRInputDeviceName.HeadTracker;
+            }
+        }
+
+        protected override bool connected { get { return true; } }
+
+        protected override void PendInputs(AirVRInputStream inputStream) {
+            inputStream.PendTransform(this, (byte)AirVRHeadTrackerKey.Transform,
+                Quaternion.Inverse(InputTracking.GetLocalRotation(XRNode.CenterEye)) * InputTracking.GetLocalPosition(XRNode.CenterEye),
+                Quaternion.identity);
+        }
+
+        public override string options {
+            get {
+                return string.Format("{{ \\\"PredictedMotionOutputEndpoint\\\": \\\"{0}\\\"}}",
+                                     MotionDataProvider.instance.predictedMotionOutputEndpoint);
+            }
+        }
+    }
+
     [DllImport(AirVRClient.LibPluginName)]
     private static extern void onairvr_EnableNetworkTimeWarp(bool enable);
 
@@ -92,7 +123,7 @@ public abstract class AirVRCameraBase : MonoBehaviour {
     [DllImport(AirVRClient.LibPluginName)]
     private static extern System.IntPtr onairvr_RenderVideoFrame_RenderThread_Func();
 
-    private HeadTrackerInputDevice _headTracker;
+    private PredictedHeadTrackerInputDevice _headTracker;
     private Transform _thisTransform;
     private Matrix4x4 _worldToLocalWithLocalRotationAsIdentity;
     private Camera _camera;
@@ -161,18 +192,21 @@ public abstract class AirVRCameraBase : MonoBehaviour {
 
             go.AddComponent<AirVRClientAudioSource>();
         }
-        _headTracker = new HeadTrackerInputDevice(_thisTransform);
     }
 
     protected virtual void Start() {
         defaultTrackedControllerModel = Resources.Load<GameObject>("trackedControllerModel");
         
         _renderCommand = RenderCommand.Create(profile, _camera);
+        
+        MotionDataProvider.LoadOnce();
 
         AirVRClient.LoadOnce(profile, this);
         AirVRInputManager.LoadOnce();
 
 		AirVRClient.MessageReceived += onAirVRMesageReceived;
+        
+        _headTracker = new PredictedHeadTrackerInputDevice(_thisTransform);
         AirVRInputManager.RegisterInputDevice(_headTracker);
 
         StartCoroutine(CallEndOfFrame());

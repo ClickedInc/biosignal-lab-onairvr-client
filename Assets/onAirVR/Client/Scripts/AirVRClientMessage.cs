@@ -54,6 +54,9 @@ public class AirVRClientMessage : AirVRMessage {
 
     // Type : Event, From : MediaStream, Name : EnableTimeWarp
     public bool Enable;
+    
+    // Type : Event, From : MediaStream, Name : Stats
+    public float LatencyFromInputToRenderVideo;
 
     // Type : Event, From : InputStream, Name : RemoteInputDeviceRegistered / RemoteInputDeviceUnregistered
     public int DeviceID;

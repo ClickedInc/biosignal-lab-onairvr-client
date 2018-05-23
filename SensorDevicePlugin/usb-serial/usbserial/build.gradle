@@ -1,0 +1,57 @@
+apply plugin: 'com.android.library'
+
+def artifact = "usbserial.jar"
+
+android {
+
+    group = 'com.felhr.usbserial'
+    version = project.VERSION_NAME
+
+    compileSdkVersion 26
+
+    compileOptions {
+        encoding "UTF-8"
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
+    }
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 26
+        archivesBaseName = "${project.name}-${project.VERSION_NAME}"
+    }
+
+    //noinspection GroovyAssignabilityCheck
+    task deleteJar(type: Delete) {
+        delete "eclipse_lib/${artifact}"
+    }
+
+    //noinspection GroovyAssignabilityCheck
+    task createJar(type: org.gradle.api.tasks.Copy) {
+        from('build/intermediates/bundles/release/')
+        into('eclipse_lib/')
+        include('classes.jar')
+        rename('classes.jar', artifact)
+    }
+
+    createJar.dependsOn(deleteJar, build)
+
+    task installDebugToUnity(type: Copy) {
+        from './build/outputs/aar/usbserial-4.5.2-debug.aar'
+        into '../../../Assets/Plugins/Android/'
+        rename 'usbserial-4.5.2-debug.aar', 'usbserial.aar'
+    }
+    task installReleaseToUnity(type: Copy) {
+        from './build/outputs/aar/usbserial-4.5.2-release.aar'
+        into '../../../Assets/Plugins/Android/'
+        rename 'usbserial-4.5.2-release.aar', 'usbserial.aar'
+    }
+    tasks.whenTaskAdded { task ->
+        if (task.name == 'assembleDebug') {
+            task.finalizedBy 'installDebugToUnity'
+        }
+        else if (task.name == 'assembleRelease') {
+            task.finalizedBy 'installReleaseToUnity'
+        }
+    }
+}

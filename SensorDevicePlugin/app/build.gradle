@@ -1,0 +1,46 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 26
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 26
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
+    }
+    task installDebugToUnity(type: Copy) {
+        from './build/outputs/aar/app-debug.aar', "../usb-serial/usbserial/build/outputs/aar/usbserial-4.5.2-debug.aar"
+        into '../../Assets/Plugins/Android/'
+        rename 'app-debug.aar', 'libSensorDevicePlugin.aar'
+    }
+    task installReleaseToUnity(type: Copy) {
+        from './build/outputs/aar/app-release.aar', "../usb-serial/usbserial/build/outputs/aar/usbserial-4.5.2-release.aar"
+        into '../../Assets/Plugins/Android/'
+        rename 'app-release.aar', 'libSensorDevicePlugin.aar'
+    }
+    tasks.whenTaskAdded { task ->
+        if (task.name == 'assembleDebug') {
+            task.finalizedBy 'installDebugToUnity'
+        }
+        else if (task.name == 'assembleRelease') {
+            task.finalizedBy 'installReleaseToUnity'
+        }
+    }
+}
+
+dependencies {
+    compile project(':usb-serial:usbserial')
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    testImplementation 'junit:junit:4.12'
+}
