@@ -10,42 +10,64 @@ using UnityEngine;
 using UnityEngine.XR;
 
 public class MotionDataProvider : MonoBehaviour {
-    private const string ConfigFile = "/sdcard/onairvr/config.json";
+    [DllImport(AirVRClient.LibPluginName)]
+    private static extern void onairvr_BeginGatherInputWithTimestamp(long timestamp);
 
     [Serializable]
-    private struct Config {
-        public string MotionDataInputEndpoint;
-        public bool UseLoopbackForPredictedMotionOutput;
+    private class PredictionConfig {
+        public string motionDataInputEndpoint;
+        public bool useLoopbackForPredictedMotionOutput;
     }
 
     [Serializable]
-    private struct Report {
-        public float OverallLatency;
+    private class PredictionConfigReader {
+        [SerializeField] private PredictionConfig prediction;
+
+        public void ReadConfig(string fileFrom, PredictionConfig to) {
+            try {
+                prediction = to;
+                JsonUtility.FromJsonOverwrite(File.ReadAllText(fileFrom), this);
+            }
+            catch (Exception e) {
+                Debug.Log("[ERROR] failed to read prediction config : " + e.ToString());
+            }
+        }
     }
 
     public static MotionDataProvider instance { get; private set; }
 
-    public static void LoadOnce() {
+    public static void LoadOnce(AirVRProfileBase profile) {
         if (instance == null) {
             GameObject go = new GameObject("MotionDataProvider");
-            go.AddComponent<MotionDataProvider>();
+            MotionDataProvider provider = go.AddComponent<MotionDataProvider>();
             Debug.Assert(instance != null);
+
+            provider._profile = profile;
         }
     }
 
+    private AirVRProfileBase _profile;
     private SensorDeviceManager _sensorDeviceManager;
     private string _motionDataInputEndpoint;
-    private string _statsReportEndpoint;
     private PushSocket _zmqPushMotionData;
-    private PushSocket _zmqPushStats;
+    private PushSocket _zmqPushProfile;
     private NetMQ.Msg _msgMotionData;
     private List<byte[]> _motionData;
 
+    private bool shouldReportProfile {
+        get { return string.IsNullOrEmpty(_profile.profileReportEndpoint) == false; }
+    }
+    
     public string predictedMotionOutputEndpoint { get; private set; }
 
-    private string convertEndpoint(string endpoint, bool loopback, int portDelta) {
+    private string convertEndpoint(string endpoint, bool loopback, int portDelta = 0) {
         string[] tokens = endpoint.Split(':');
         Debug.Assert(tokens.Length == 3);
+
+        // use TCP transport layer for AMQP endpoint
+        if (tokens[0].Equals("amqp")) {
+            tokens[0] = "tcp";
+        }
 
         return tokens[0] + ":" + (loopback ? "//127.0.0.1" : tokens[1]) + ":" + (int.Parse(tokens[2]) + portDelta).ToString();
     }
@@ -56,22 +78,25 @@ public class MotionDataProvider : MonoBehaviour {
         }
         instance = this;
 
-        if (File.Exists(ConfigFile)) {
-            Config config = JsonUtility.FromJson<Config>(File.ReadAllText(ConfigFile));
-            
-            _motionDataInputEndpoint = config.MotionDataInputEndpoint;
-            predictedMotionOutputEndpoint = convertEndpoint(_motionDataInputEndpoint, config.UseLoopbackForPredictedMotionOutput, 2);
+        if (File.Exists(AirVRCamera.ConfigFile)) {
+            PredictionConfig config = new PredictionConfig();
+            new PredictionConfigReader().ReadConfig(AirVRCamera.ConfigFile, config);
+
+            _motionDataInputEndpoint = convertEndpoint(config.motionDataInputEndpoint, false);
+            predictedMotionOutputEndpoint = convertEndpoint(
+                _motionDataInputEndpoint,
+                config.useLoopbackForPredictedMotionOutput, 
+                1
+            );
         }
         else {
-            _motionDataInputEndpoint = "tcp://192.168.0.20:5555";
-            predictedMotionOutputEndpoint = convertEndpoint(_motionDataInputEndpoint, false, 2);
+            _motionDataInputEndpoint = convertEndpoint("amqp://192.168.0.20:5555", false);
+            predictedMotionOutputEndpoint = convertEndpoint(_motionDataInputEndpoint, false, 1);
         }
-
-        _statsReportEndpoint = convertEndpoint(_motionDataInputEndpoint, false, 1);
                     
         _sensorDeviceManager = gameObject.AddComponent<SensorDeviceManager>();
         _zmqPushMotionData = new PushSocket();
-        _zmqPushStats = new PushSocket();
+        _zmqPushProfile = new PushSocket();
         _msgMotionData = new NetMQ.Msg();
         _motionData = new List<byte[]>();
 
@@ -82,7 +107,12 @@ public class MotionDataProvider : MonoBehaviour {
 
     void Start() {
         _zmqPushMotionData.Connect(_motionDataInputEndpoint);
-        _zmqPushStats.Connect(_statsReportEndpoint);
+
+        if (shouldReportProfile) {
+            _zmqPushProfile.Connect(
+                convertEndpoint(_profile.profileReportEndpoint, false)
+            );
+        }
     }
 
     void Update() {
@@ -97,6 +127,8 @@ public class MotionDataProvider : MonoBehaviour {
             Quaternion baseSensorOrientation = MotionData.GetOrientation(_motionData[_motionData.Count -1]);
             
             for (int i = 0; i < _motionData.Count; i++) {
+                onairvr_BeginGatherInputWithTimestamp(MotionData.GetTimestamp(_motionData[i]));
+                
                 MotionData.SetOrientation(_motionData[i], Quaternion.Inverse(baseSensorOrientation) *
                                                           MotionData.GetOrientation(_motionData[i]) *
                                                           baseOvrOrientation);
@@ -113,23 +145,29 @@ public class MotionDataProvider : MonoBehaviour {
 
     void OnDestroy() {
         _zmqPushMotionData.Close();
-        _zmqPushStats.Close();
         _msgMotionData.Close();
         
         _zmqPushMotionData.Dispose();
-        _zmqPushStats.Dispose();
+
+        if (shouldReportProfile) {
+            _zmqPushProfile.Close();
+            _zmqPushProfile.Dispose();
+        }
         
         NetMQ.NetMQConfig.Cleanup(false);
     }
     
     // handle AirVRClientMessages
     private void onAirVRMessageReceived(AirVRClientMessage message) {
+        if (shouldReportProfile == false) {
+            return;
+        }
+
         if (message.From.Equals(AirVRClientMessage.FromMediaStream)) {
-            if (message.Name.Equals("Stats")) {
-                Report report = new Report();
-                report.OverallLatency = message.LatencyFromInputToRenderVideo;
+            if (message.Name.Equals("Profile")) {
+                byte[] data = Convert.FromBase64String(message.Data); 
                 
-                _zmqPushStats.TrySendFrame(JsonUtility.ToJson(report));
+                _zmqPushProfile.TrySendFrame(data);
             }
         }
     }

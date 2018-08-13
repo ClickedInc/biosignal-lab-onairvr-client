@@ -25,7 +25,7 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
         void AirVRClientUserDataReceived(byte[] userData);
 	}
 
-    public const string LibPluginName = "onAirVRClientPlugin";
+	public const string LibPluginName = "onAirVRClientPlugin";
 
 	private static AirVRClient _instance;
     private static AirVRClientEventDispatcher _eventDispatcher;
@@ -99,7 +99,7 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
         }
     }
 
-    public static void Connect(string address, int port, string userID = "") {
+	public static void Connect(string address, int port, string userID = "") {
 		if (_instance != null) {
 			_instance._profile.userID = userID;
 			onairvr_SetProfile(JsonUtility.ToJson(_instance._profile.GetSerializable()));

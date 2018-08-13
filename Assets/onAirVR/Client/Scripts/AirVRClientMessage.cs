@@ -56,7 +56,7 @@ public class AirVRClientMessage : AirVRMessage {
     public bool Enable;
     
     // Type : Event, From : MediaStream, Name : Stats
-    public float LatencyFromInputToRenderVideo;
+    public string Data;
 
     // Type : Event, From : InputStream, Name : RemoteInputDeviceRegistered / RemoteInputDeviceUnregistered
     public int DeviceID;

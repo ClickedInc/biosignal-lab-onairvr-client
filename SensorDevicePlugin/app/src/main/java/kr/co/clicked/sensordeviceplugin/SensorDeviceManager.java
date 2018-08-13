@@ -68,7 +68,7 @@ public class SensorDeviceManager extends HandlerThread {
 
                 MotionData motionData =
                         MotionData.create(_sampleNumber,
-                                          current / 1000.0,
+                                          current * 705600, // to flicks
                                           _currentBiosignalSensorDevice != null ? _currentBiosignalSensorDevice.getCurrentValue() : null,
                                           _currentMotionSensorDevice != null ? _currentMotionSensorDevice.getCurrentValue() : null);
                 if (motionData != null) {

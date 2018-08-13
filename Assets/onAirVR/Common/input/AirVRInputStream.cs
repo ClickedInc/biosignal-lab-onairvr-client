@@ -95,7 +95,9 @@ public abstract class AirVRInputStream {
     protected abstract bool GetInputFloat3Impl(byte deviceID, byte controlID, ref Vector3 value);
     protected abstract bool GetInputFloat2Impl(byte deviceID, byte controlID, ref Vector2 value);
     protected abstract bool GetInputFloatImpl(byte deviceID, byte controlID, ref float value);
-    protected abstract void SendPendingInputEventsImpl();
+
+    protected abstract void BeginGatherInputImpl(ref long timestamp);
+    protected abstract void SendPendingInputEventsImpl(long gatherTimestamp);
     protected abstract void ResetInputImpl();
 
 
@@ -307,10 +309,13 @@ public abstract class AirVRInputStream {
             _timer.UpdatePerFrame();
 
             if (_timer.expired) {
+                long timestamp = 0;
+                BeginGatherInputImpl(ref timestamp);
+                
                 foreach (var key in senders.Keys) {
                     senders[key].PendInputsPerFrame(this);
                 }
-                SendPendingInputEventsImpl();
+                SendPendingInputEventsImpl(timestamp);
             }
         }
     }
