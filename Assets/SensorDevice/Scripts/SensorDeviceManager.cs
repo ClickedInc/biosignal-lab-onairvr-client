@@ -6,6 +6,7 @@ using UnityEngine;
 
 public class MotionData {
 	private const int OrientationStart = 2 + 4 * 17;
+	private const int TimestampStart = 2 + 4 * 21;
 
 	public static Quaternion GetOrientation(byte[] data) {
 		byte[] bytes = new byte[4 * 4];
@@ -29,6 +30,16 @@ public class MotionData {
 			}
 			Array.Copy(bytes, 0, data, OrientationStart + i * 4, 4);
 		}
+	}
+
+	public static long GetTimestamp(byte[] data) {
+		byte[] bytes = new byte[8];
+		Array.Copy(data, TimestampStart, bytes, 0, 8);
+
+		if (BitConverter.IsLittleEndian) {
+			Array.Reverse(bytes);
+		}
+		return BitConverter.ToInt64(bytes, 0);
 	}
 
 	public static string ToString(byte[] data) {

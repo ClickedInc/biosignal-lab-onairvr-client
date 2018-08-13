@@ -123,6 +123,9 @@ public abstract class AirVRCameraBase : MonoBehaviour {
     [DllImport(AirVRClient.LibPluginName)]
     private static extern System.IntPtr onairvr_RenderVideoFrame_RenderThread_Func();
 
+    [DllImport(AirVRClient.LibPluginName)]
+    private static extern System.IntPtr onairvr_EndOfRenderFrame_RenderThread_Func();
+
     private PredictedHeadTrackerInputDevice _headTracker;
     private Transform _thisTransform;
     private Matrix4x4 _worldToLocalWithLocalRotationAsIdentity;
@@ -143,6 +146,7 @@ public abstract class AirVRCameraBase : MonoBehaviour {
             yield return null;
 
             _renderingRight = false;
+            GL.IssuePluginEvent(onairvr_EndOfRenderFrame_RenderThread_Func(), 0);
         }
     }
 
@@ -199,7 +203,7 @@ public abstract class AirVRCameraBase : MonoBehaviour {
         
         _renderCommand = RenderCommand.Create(profile, _camera);
         
-        MotionDataProvider.LoadOnce();
+        MotionDataProvider.LoadOnce(profile);
 
         AirVRClient.LoadOnce(profile, this);
         AirVRInputManager.LoadOnce();

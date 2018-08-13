@@ -1,4 +1,9 @@
 {
-    "MotionDataInputEndpoint": "tcp://192.168.0.20:5555",
-    "UseLoopbackForPredictedMotionOutput": true
+    "profiler": {
+        "reportEndpoint": "amqp://192.168.0.78:5554"
+    },
+    "prediction": {
+        "motionDataInputEndpoint": "amqp://192.168.0.78:5555",
+        "useLoopbackForPredictedMotionOutput": true
+    }
 }

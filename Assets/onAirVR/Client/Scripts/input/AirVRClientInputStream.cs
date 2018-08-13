@@ -47,7 +47,10 @@ public class AirVRClientInputStream : AirVRInputStream {
                                                                 ref float worldHitNormalX, ref float worldHitNormalY, ref float worldHitNormalZ);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_SendPendingInputs();
+    private static extern void onairvr_BeginGatherInput(ref long timestamp);
+    
+    [DllImport(AirVRClient.LibPluginName)]
+    private static extern void onairvr_SendPendingInputs(long gatherTimestamp);
 
     [DllImport(AirVRClient.LibPluginName)]
     private static extern void onairvr_ResetInput();
@@ -175,8 +178,12 @@ public class AirVRClientInputStream : AirVRInputStream {
                                                 ref worldHitNormal.x, ref worldHitNormal.y, ref worldHitNormal.z);
     }
 
-    protected override void SendPendingInputEventsImpl() {
-        onairvr_SendPendingInputs();
+    protected override void BeginGatherInputImpl(ref long timestamp) {
+        onairvr_BeginGatherInput(ref timestamp);
+    }
+
+    protected override void SendPendingInputEventsImpl(long gatherTimestamp) {
+        onairvr_SendPendingInputs(gatherTimestamp);
     }
 
     protected override void ResetInputImpl() {

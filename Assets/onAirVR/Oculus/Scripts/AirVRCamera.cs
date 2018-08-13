@@ -17,6 +17,8 @@ using System.Runtime.InteropServices;
 [RequireComponent(typeof(Camera))]
 
 public class AirVRCamera : AirVRCameraBase {
+    public const string ConfigFile = "/sdcard/onairvr/config.json";
+    
     [DllImport(AirVRClient.LibPluginName)]
     private static extern void onairvr_InitJNI();
 
@@ -30,6 +32,7 @@ public class AirVRCamera : AirVRCameraBase {
         
         base.Awake();
         _profile = new AirVRProfile();
+        _profile.ParseConfig(ConfigFile);
     }
 
     protected override void Start() {

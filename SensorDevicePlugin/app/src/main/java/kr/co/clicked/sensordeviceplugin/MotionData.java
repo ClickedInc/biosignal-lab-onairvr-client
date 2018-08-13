@@ -39,7 +39,7 @@ public class MotionData {
                 1;       // footer (0xC7)
     }
 
-    public static MotionData create(byte sampleNumber, double timeStamp, BiosignalSensorData biosignal, InertiaSensorData inertia) {
+    public static MotionData create(byte sampleNumber, long timeStamp, BiosignalSensorData biosignal, InertiaSensorData inertia) {
         MotionData result = _pool.retain();
         if (result != null) {
             result.fill(sampleNumber, timeStamp, biosignal, inertia);
@@ -64,7 +64,7 @@ public class MotionData {
         }
     }
 
-    private void fill(byte sampleNumber, double timeStamp, BiosignalSensorData biosignal, InertiaSensorData inertia) {
+    private void fill(byte sampleNumber, long timeStamp, BiosignalSensorData biosignal, InertiaSensorData inertia) {
         _data.put((byte)0xA0);
         _data.put(sampleNumber);
 
@@ -82,7 +82,7 @@ public class MotionData {
             fillWithZeros(_data, InertiaSensorData.SIZE);
         }
 
-        _data.putDouble(timeStamp);
+        _data.putLong(timeStamp);
         _data.put((byte)0xC7);
     }
 
