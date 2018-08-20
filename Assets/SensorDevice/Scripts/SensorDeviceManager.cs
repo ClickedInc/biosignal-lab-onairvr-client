@@ -17,14 +17,19 @@ public class MotionData {
 			if (BitConverter.IsLittleEndian) {
 				Array.Reverse(bytes, i * 4, 4);
 			}
-			result[i] = BitConverter.ToSingle(bytes, i * 4);
+			
+			// convert OpenGL to Unity
+			result[i] = (i == 0 || i == 1 ? -1.0f : 1.0f) * BitConverter.ToSingle(bytes, i * 4);
 		}
 		return result;
 	}
 
 	public static void SetOrientation(byte[] data, Quaternion orientation) {
 		for (int i = 0; i < 4; i++) {
-			byte[] bytes = BitConverter.GetBytes(orientation[i]);
+			// convert Unity to OpenGL
+			byte[] bytes = BitConverter.GetBytes(
+				(i == 0 || i == 1 ? -1.0f : 1.0f) * orientation[i]
+			);
 			if (BitConverter.IsLittleEndian) {
 				Array.Reverse(bytes);
 			}

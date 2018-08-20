@@ -1,7 +1,11 @@
 package kr.co.clicked.sensordeviceplugin;
 
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Vector;
 
 public class InertiaSensorData {
     public static final int SIZE = 13 * 4;
@@ -15,29 +19,37 @@ public class InertiaSensorData {
 
     public byte[] getData() { return _data.array(); }
 
-    private void setValue(float[] value, int offset, int length) {
+    private void setValue(Quaternionf value, int offset) {
         synchronized (this) {
             _data.position(offset);
-            for (int i = 0; i < length; i++) {
-                _data.putFloat(value[i]);
-            }
+            _data.putFloat(value.x);
+            _data.putFloat(value.y);
+            _data.putFloat(value.z);
+            _data.putFloat(value.w);
         }
     }
 
-    public void setAcceleration(float[] value) {
-        setValue(value, 0, 3);
+    private void setValue(Vector3f value, int offset) {
+        synchronized (this) {
+            _data.position(offset);
+            _data.putFloat(value.x);
+            _data.putFloat(value.y);
+            _data.putFloat(value.z);
+        }
     }
 
-    public void setAngularVelocities(float[] value) {
-        setValue(value, 3 * 4, 3);
+    public void setAcceleration(Vector3f value) {  setValue(value, 0); }
+
+    public void setAngularVelocities(Vector3f value) {
+        setValue(value, 3 * 4);
     }
 
-    public void setMagneticField(float[] value) {
-        setValue(value, 6 * 4, 3);
+    public void setMagneticField(Vector3f value) {
+        setValue(value, 6 * 4);
     }
 
-    public void setOrientation(float[] value) {
-        setValue(value, 9 * 4, 4);
+    public void setOrientation(Quaternionf value) {
+        setValue(value, 9 * 4);
     }
 
     @Override
