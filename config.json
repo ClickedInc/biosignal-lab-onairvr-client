@@ -1,9 +1,9 @@
 {
     "profiler": {
-        "reportEndpoint": "amqp://192.168.0.78:5554"
+        "reportEndpoint": "amqp://192.168.0.139:5554"
     },
     "prediction": {
-        "motionDataInputEndpoint": "amqp://192.168.0.78:5555",
+        "motionDataInputEndpoint": "amqp://192.168.0.139:5555",
         "useLoopbackForPredictedMotionOutput": true
     }
 }

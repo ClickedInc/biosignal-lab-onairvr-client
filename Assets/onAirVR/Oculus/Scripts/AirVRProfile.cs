@@ -146,8 +146,10 @@ public class AirVRProfile : AirVRProfileBase {
 
 	public override float[] videoScale {
 		get {
-			OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
-			return new float[] { (float)videoWidth / 2 / desc.resolution.x, (float)videoHeight / desc.resolution.y };
+            OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
+            //var eyeTextureWidth = UnityEngine.XR.XRSettings.eyeTextureWidth;
+            //var eyeTextureHeight = UnityEngine.XR.XRSettings.eyeTextureHeight;
+            return new float[] { (float)videoWidth / 2 / desc.resolution.x, (float)videoHeight / desc.resolution.y };
 		}
 	}
 
