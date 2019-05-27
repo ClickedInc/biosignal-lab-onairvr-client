@@ -47,6 +47,7 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     private AirVRProfileBase _profile;
+    private byte[] _vfov;
     private SensorDeviceManager _sensorDeviceManager;
     private string _motionDataInputEndpoint;
     private PushSocket _zmqPushMotionData;
@@ -106,6 +107,12 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     void Start() {
+        var vfov = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye).fov.y * Mathf.Deg2Rad;
+        _vfov = BitConverter.GetBytes(vfov);
+        if (BitConverter.IsLittleEndian) {
+            Array.Reverse(_vfov);
+        }
+
         _zmqPushMotionData.Connect(_motionDataInputEndpoint);
 
         if (shouldReportProfile) {
@@ -124,7 +131,7 @@ public class MotionDataProvider : MonoBehaviour {
 
         if (_motionData.Count > 0) {
             Quaternion baseOvrOrientation = InputTracking.GetLocalRotation(XRNode.CenterEye);
-            Quaternion baseSensorOrientation = MotionData.GetOrientation(_motionData[_motionData.Count -1]);
+            Quaternion baseSensorOrientation = MotionData.GetOrientation(_motionData[_motionData.Count - 1]);
             
             for (int i = 0; i < _motionData.Count; i++) {
                 onairvr_BeginGatherInputWithTimestamp(MotionData.GetTimestamp(_motionData[i]));
@@ -132,9 +139,10 @@ public class MotionDataProvider : MonoBehaviour {
                 MotionData.SetOrientation(_motionData[i], Quaternion.Inverse(baseSensorOrientation) *
                                                           MotionData.GetOrientation(_motionData[i]) *
                                                           baseOvrOrientation);
-                
-                _msgMotionData.InitPool(_motionData[i].Length);
+
+                _msgMotionData.InitPool(_motionData[i].Length + _vfov.Length);
                 Array.Copy(_motionData[i], _msgMotionData.Data, _motionData[i].Length);
+                Array.Copy(_vfov, 0, _msgMotionData.Data, _motionData[i].Length, _vfov.Length);
 
                 _zmqPushMotionData.TrySend(ref _msgMotionData, TimeSpan.Zero, false);
             }

@@ -141,10 +141,9 @@ public abstract class AirVRProfileBase {
 	public abstract int[] leftEyeViewport { get; }
 	public abstract int[] rightEyeViewport { get; }
 
-	public abstract float[]
-		videoScale { get; } // ratio of the size of the whole video rendered to the size of the area visible to an eye camera
+	public abstract float[] videoScale { get; } // ratio of the size of the whole video rendered to the size of the area visible to an eye camera
 
-	public abstract bool isUserPresent { get; }
+    public abstract bool isUserPresent { get; }
 	public abstract float delayToResumePlayback { get; }
 
 	public virtual float[] videoRenderMeshVertices {
