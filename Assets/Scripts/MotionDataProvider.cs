@@ -47,7 +47,7 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     private AirVRProfileBase _profile;
-    private byte[] _vfov;
+    private byte[] _cameraProjection;
     private SensorDeviceManager _sensorDeviceManager;
     private string _motionDataInputEndpoint;
     private PushSocket _zmqPushMotionData;
@@ -107,10 +107,15 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     void Start() {
-        var vfov = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye).fov.y * Mathf.Deg2Rad;
-        _vfov = BitConverter.GetBytes(vfov);
-        if (BitConverter.IsLittleEndian) {
-            Array.Reverse(_vfov);
+        var cameraProjection = _profile.leftEyeCameraNearPlane;
+        _cameraProjection = new byte[cameraProjection.Length * sizeof(float)];
+
+        for (int i = 0, pos = 0; i < cameraProjection.Length; i++) {
+            var value = BitConverter.GetBytes(cameraProjection[i]);
+            Array.Reverse(value);
+
+            Array.Copy(value, 0, _cameraProjection, pos, value.Length);
+            pos += value.Length;
         }
 
         _zmqPushMotionData.Connect(_motionDataInputEndpoint);
@@ -140,9 +145,9 @@ public class MotionDataProvider : MonoBehaviour {
                                                           MotionData.GetOrientation(_motionData[i]) *
                                                           baseOvrOrientation);
 
-                _msgMotionData.InitPool(_motionData[i].Length + _vfov.Length);
+                _msgMotionData.InitPool(_motionData[i].Length + _cameraProjection.Length);
                 Array.Copy(_motionData[i], _msgMotionData.Data, _motionData[i].Length);
-                Array.Copy(_vfov, 0, _msgMotionData.Data, _motionData[i].Length, _vfov.Length);
+                Array.Copy(_cameraProjection, 0, _msgMotionData.Data, _motionData[i].Length, _cameraProjection.Length);
 
                 _zmqPushMotionData.TrySend(ref _msgMotionData, TimeSpan.Zero, false);
             }
