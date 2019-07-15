@@ -4,6 +4,7 @@
     },
     "prediction": {
         "motionDataInputEndpoint": "amqp://192.168.0.139:5555",
-        "useLoopbackForPredictedMotionOutput": true
+        "useLoopbackForPredictedMotionOutput": true,
+        "motionDataPerSec": "60"
     }
 }

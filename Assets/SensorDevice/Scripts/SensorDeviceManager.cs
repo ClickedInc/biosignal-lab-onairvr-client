@@ -17,10 +17,10 @@ public class MotionData {
 			if (BitConverter.IsLittleEndian) {
 				Array.Reverse(bytes, i * 4, 4);
 			}
-			
-			// convert OpenGL to Unity
-			result[i] = (i == 0 || i == 1 ? -1.0f : 1.0f) * BitConverter.ToSingle(bytes, i * 4);
-		}
+
+            // convert OpenGL to Unity
+            result[i] = (i == 0 || i == 1 ? -1.0f : 1.0f) * BitConverter.ToSingle(bytes, i * 4);
+        }
 		return result;
 	}
 
@@ -46,6 +46,14 @@ public class MotionData {
 		}
 		return BitConverter.ToInt64(bytes, 0);
 	}
+
+    public static void SetTimestamp(byte[] data, long timestamp) {
+        byte[] bytes = BitConverter.GetBytes(timestamp);
+        if (BitConverter.IsLittleEndian) {
+            Array.Reverse(bytes);
+        }
+        Array.Copy(bytes, 0, data, TimestampStart, bytes.Length);
+    }
 
 	public static string ToString(byte[] data) {
 		int biosignalStart = 2;

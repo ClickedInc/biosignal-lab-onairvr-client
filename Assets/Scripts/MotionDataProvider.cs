@@ -11,12 +11,16 @@ using UnityEngine.XR;
 
 public class MotionDataProvider : MonoBehaviour {
     [DllImport(AirVRClient.LibPluginName)]
+    private static extern void onairvr_BeginGatherInput(ref long timestamp);
+
+    [DllImport(AirVRClient.LibPluginName)]
     private static extern void onairvr_BeginGatherInputWithTimestamp(long timestamp);
 
     [Serializable]
     private class PredictionConfig {
         public string motionDataInputEndpoint;
         public bool useLoopbackForPredictedMotionOutput;
+        public string motionDataPerSec;
     }
 
     [Serializable]
@@ -54,6 +58,7 @@ public class MotionDataProvider : MonoBehaviour {
     private PushSocket _zmqPushProfile;
     private NetMQ.Msg _msgMotionData;
     private List<byte[]> _motionData;
+    private bool _120HzMotionDataMode = true;
 
     private bool shouldReportProfile {
         get { return string.IsNullOrEmpty(_profile.profileReportEndpoint) == false; }
@@ -89,13 +94,15 @@ public class MotionDataProvider : MonoBehaviour {
                 config.useLoopbackForPredictedMotionOutput, 
                 1
             );
+            _120HzMotionDataMode = !config.motionDataPerSec.Equals("60");
         }
         else {
             _motionDataInputEndpoint = convertEndpoint("amqp://192.168.0.20:5555", false);
             predictedMotionOutputEndpoint = convertEndpoint(_motionDataInputEndpoint, false, 1);
         }
-                    
+
         _sensorDeviceManager = gameObject.AddComponent<SensorDeviceManager>();
+
         _zmqPushMotionData = new PushSocket();
         _zmqPushProfile = new PushSocket();
         _msgMotionData = new NetMQ.Msg();
@@ -135,24 +142,12 @@ public class MotionDataProvider : MonoBehaviour {
         }
 
         if (_motionData.Count > 0) {
-            Quaternion baseOvrOrientation = InputTracking.GetLocalRotation(XRNode.CenterEye);
-            Quaternion baseSensorOrientation = MotionData.GetOrientation(_motionData[_motionData.Count - 1]);
-            
-            for (int i = 0; i < _motionData.Count; i++) {
-                onairvr_BeginGatherInputWithTimestamp(MotionData.GetTimestamp(_motionData[i]));
-                
-                MotionData.SetOrientation(_motionData[i], Quaternion.Inverse(baseSensorOrientation) *
-                                                          MotionData.GetOrientation(_motionData[i]) *
-                                                          baseOvrOrientation);
-
-                _msgMotionData.InitPool(_motionData[i].Length + _cameraProjection.Length);
-                Array.Copy(_motionData[i], _msgMotionData.Data, _motionData[i].Length);
-                Array.Copy(_cameraProjection, 0, _msgMotionData.Data, _motionData[i].Length, _cameraProjection.Length);
-
-                _zmqPushMotionData.TrySend(ref _msgMotionData, TimeSpan.Zero, false);
+            if (_120HzMotionDataMode) {
+                updateIn120HzMode();
             }
-            
-            _motionData.Clear();
+            else {
+                updateIn60HzMode();
+            }
         }
     }
 
@@ -168,6 +163,47 @@ public class MotionDataProvider : MonoBehaviour {
         }
         
         NetMQ.NetMQConfig.Cleanup(false);
+    }
+
+    private void updateIn60HzMode() {
+        int lastIndex = _motionData.Count - 1;
+
+        long timestamp = 0;
+        onairvr_BeginGatherInput(ref timestamp);
+
+        Debug.Log("update 60Hz timestamp: " + timestamp);
+
+        MotionData.SetTimestamp(_motionData[lastIndex], timestamp);
+        MotionData.SetOrientation(_motionData[lastIndex], InputTracking.GetLocalRotation(XRNode.CenterEye));
+
+        sendMotionData(_motionData[lastIndex]);
+
+        _motionData.Clear();
+    }
+
+    private void updateIn120HzMode() {
+        Quaternion baseOvrOrientation = InputTracking.GetLocalRotation(XRNode.CenterEye);
+        Quaternion baseSensorOrientation = MotionData.GetOrientation(_motionData[_motionData.Count - 1]);
+
+        for (int i = 0; i < _motionData.Count; i++) {
+            onairvr_BeginGatherInputWithTimestamp(MotionData.GetTimestamp(_motionData[i]));
+
+            MotionData.SetOrientation(_motionData[i], baseOvrOrientation *
+                                                      Quaternion.Inverse(baseSensorOrientation) *
+                                                      MotionData.GetOrientation(_motionData[i]));
+
+            sendMotionData(_motionData[i]);
+        }
+
+        _motionData.Clear();
+    }
+
+    private void sendMotionData(byte[] data) {
+        _msgMotionData.InitPool(data.Length + _cameraProjection.Length);
+        Array.Copy(data, _msgMotionData.Data, data.Length);
+        Array.Copy(_cameraProjection, 0, _msgMotionData.Data, data.Length, _cameraProjection.Length);
+
+        _zmqPushMotionData.TrySend(ref _msgMotionData, TimeSpan.Zero, false);
     }
     
     // handle AirVRClientMessages
