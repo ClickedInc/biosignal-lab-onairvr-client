@@ -49,6 +49,7 @@ public abstract class AirVRProfileBase {
 	[SerializeField] private string UserID;
 	[SerializeField] private string[] SupportedVideoCodecs;
 	[SerializeField] private string[] SupportedAudioCodecs;
+    [SerializeField] private int EyeTextureSize;
 	[SerializeField] private int VideoWidth;
 	[SerializeField] private int VideoHeight;
 	[SerializeField] private float VideoFrameRate;
@@ -125,6 +126,7 @@ public abstract class AirVRProfileBase {
 		}
 	}
 
+    public abstract int eyeTextureSize { get; }
 	public abstract int videoWidth { get; }
 	public abstract int videoHeight { get; }
 	public abstract float videoFrameRate { get; }
@@ -211,6 +213,7 @@ public abstract class AirVRProfileBase {
 	public AirVRProfileBase GetSerializable() {
 		SupportedVideoCodecs = supportedVideoCodecs;
 		SupportedAudioCodecs = supportedAudioCodecs;
+        EyeTextureSize = eyeTextureSize;
 		VideoWidth = videoWidth;
 		VideoHeight = videoHeight;
 		VideoFrameRate = videoFrameRate;

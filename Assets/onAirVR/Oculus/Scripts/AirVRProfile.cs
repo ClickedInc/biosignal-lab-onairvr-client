@@ -15,15 +15,22 @@ using UnityEngine.Assertions.Comparers;
 public class AirVRProfile : AirVRProfileBase {
 	private bool _userPresent;
 
-	public override int videoWidth { 
+    public override int eyeTextureSize {
         get {
-            return 2560;
+            OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
+            return (int)desc.resolution.x;
+        }
+    }
+
+    public override int videoWidth { 
+        get {
+            return 3940; // 2560;
         }
     }
 
     public override int videoHeight { 
         get {
-            return 1280;
+            return 1920; // 1280;
         }
     }
 

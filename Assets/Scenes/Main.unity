@@ -3105,7 +3105,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _room: {fileID: 2129083678}
-  _renderScale: 1.2
+  _renderScale: 1
 --- !u!114 &624744519
 MonoBehaviour:
   m_ObjectHideFlags: 0
