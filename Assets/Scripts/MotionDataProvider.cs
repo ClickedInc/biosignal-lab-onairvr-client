@@ -171,8 +171,6 @@ public class MotionDataProvider : MonoBehaviour {
         long timestamp = 0;
         onairvr_BeginGatherInput(ref timestamp);
 
-        Debug.Log("update 60Hz timestamp: " + timestamp);
-
         MotionData.SetTimestamp(_motionData[lastIndex], timestamp);
         MotionData.SetOrientation(_motionData[lastIndex], InputTracking.GetLocalRotation(XRNode.CenterEye));
 
