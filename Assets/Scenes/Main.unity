@@ -3358,7 +3358,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _inputModule: {fileID: 1185450159}
-  _gazePointer: {fileID: 0}
+  _gazePointer: {fileID: 1784095917}
   _trackingSpace: {fileID: 1961276076}
   _centerEyeAnchor: {fileID: 1961276072}
   _leftHandAnchor: {fileID: 447226285}
