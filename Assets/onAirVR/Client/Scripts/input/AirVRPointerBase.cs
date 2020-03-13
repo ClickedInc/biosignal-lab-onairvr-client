@@ -1,6 +1,6 @@
 ﻿/***********************************************************
 
-  Copyright (c) 2017-2018 Clicked, Inc.
+  Copyright (c) 2017-present Clicked, Inc.
 
   Licensed under the MIT license found in the LICENSE file 
   in the Docs folder of the distributed package.
@@ -257,7 +257,7 @@ public abstract class AirVRPointerBase : MonoBehaviour {
 		if (createRay) {
 			Material mat = new Material(Shader.Find("onAirVR/Unlit vertex color"));
 
-			_ray = gameObject.AddComponent<LineRenderer>();
+			_ray = _body.gameObject.AddComponent<LineRenderer>();
 			_ray.positionCount = RayPositions.Length;
 			_ray.receiveShadows = false;
 			_ray.material = mat;

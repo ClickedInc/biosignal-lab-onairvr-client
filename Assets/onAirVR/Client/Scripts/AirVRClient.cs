@@ -1,6 +1,6 @@
 /***********************************************************
 
-  Copyright (c) 2017-2018 Clicked, Inc.
+  Copyright (c) 2017-present Clicked, Inc.
 
   Licensed under the MIT license found in the LICENSE file 
   in the Docs folder of the distributed package.
@@ -25,47 +25,47 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
         void AirVRClientUserDataReceived(byte[] userData);
 	}
 
-	public const string LibPluginName = "onAirVRClientPlugin";
+    public const string LibPluginName = "ocs";
 
 	private static AirVRClient _instance;
     private static AirVRClientEventDispatcher _eventDispatcher;
     private static bool _checkCopyright;
 
 	[DllImport(LibPluginName)]
-	private static extern void onairvr_SetProfile(string profile);
+	private static extern void ocs_SetProfile(string profile);
 
 	[DllImport(LibPluginName)]
-	private static extern int onairvr_Init(string licenseFilePath, int audioOutputSampleRate, bool hasInput);
+	private static extern int ocs_Init(string licenseFilePath, int audioOutputSampleRate, bool hasInput);
 
     [DllImport(LibPluginName)]
-    private static extern void onairvr_RequestConnect(string address, int port);
+    private static extern void ocs_RequestConnect(string address, int port);
 
 	[DllImport(LibPluginName)]
-	private static extern void onairvr_RequestPlay();
+	private static extern void ocs_RequestPlay();
 
 	[DllImport(LibPluginName)]
-	private static extern void onairvr_RequestStop();
+	private static extern void ocs_RequestStop();
 
 	[DllImport(LibPluginName)]
-	private static extern void onairvr_RequestDisconnect();
+	private static extern void ocs_RequestDisconnect();
 	
 	[DllImport(LibPluginName)]
-	private static extern void onairvr_Cleanup();
+	private static extern void ocs_Cleanup();
 
 	[DllImport(LibPluginName)]
-	private static extern bool onairvr_IsConnected();
+	private static extern bool ocs_IsConnected();
 
 	[DllImport(LibPluginName)]
-	private static extern bool onairvr_IsPlaying();
+	private static extern bool ocs_IsPlaying();
 
     [DllImport(LibPluginName)]
-    private static extern IntPtr onairvr_PrepareRender_RenderThread_Func();
+    private static extern IntPtr ocs_PrepareRender_RenderThread_Func();
 
     [DllImport(LibPluginName)]
-    private static extern bool onairvr_GetVideoRenderTargetTexture(ref System.IntPtr texture, ref int width, ref int height);
+    private static extern bool ocs_GetVideoRenderTargetTexture(ref System.IntPtr texture, ref int width, ref int height);
 
 	[DllImport(LibPluginName)]
-	private static extern void onairvr_EnableCopyrightCheck(bool enable);
+	private static extern void ocs_EnableCopyrightCheck(bool enable);
 
 	public delegate void OnAirVRMessageReceiveHandler(AirVRClientMessage messsage);
 	public static event OnAirVRMessageReceiveHandler MessageReceived;
@@ -73,15 +73,23 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
 	public static EventHandler Delegate { private get; set; }
 
 	public static bool connected {
-		get { 
-			return onairvr_IsConnected();
-		}
+		get {
+#if !UNITY_EDITOR && UNITY_ANDROID
+			return ocs_IsConnected();
+#else
+            return false;
+#endif
+        }
 	}
 
 	public static bool playing {
-		get { 
-			return onairvr_IsPlaying();
-		}
+		get {
+#if !UNITY_EDITOR && UNITY_ANDROID
+            return ocs_IsPlaying();
+#else
+            return false;
+#endif
+        }
 	}
 
     public static void LoadOnce(AirVRProfileBase profile, AirVRCameraBase camera) {
@@ -95,17 +103,19 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
                 _instance._videoFrameRenderer = new AirVRVideoFrameRenderer(go, profile, camera);
             }
 
-            Debug.Log("onAirVR Profile: " + JsonUtility.ToJson(profile.GetSerializable()));
-			onairvr_SetProfile(JsonUtility.ToJson(profile.GetSerializable()));
+#if !UNITY_EDITOR && UNITY_ANDROID
+            ocs_SetProfile(JsonUtility.ToJson(profile.GetSerializable()));
+#endif
         }
     }
 
-	public static void Connect(string address, int port, string userID = "") {
+    public static void Connect(string address, int port) {
 		if (_instance != null) {
-			_instance._profile.userID = userID;
-			onairvr_SetProfile(JsonUtility.ToJson(_instance._profile.GetSerializable()));
-			
-			onairvr_RequestConnect(address, port);
+			ocs_SetProfile(JsonUtility.ToJson(_instance._profile.GetSerializable()));
+
+#if !UNITY_EDITOR && UNITY_ANDROID
+			ocs_RequestConnect(address, port);
+#endif
 		}
     }
 
@@ -122,10 +132,16 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
 	}
 
 	public static void Disconnect() {
-		onairvr_RequestDisconnect();
+		ocs_RequestDisconnect();
 	}
-		
-    private AirVRProfileBase _profile;
+
+	public static void SendUserData(byte[] data) {
+		if (_eventDispatcher != null) {
+			_eventDispatcher.SendUserData(data);
+		}
+	}
+
+	private AirVRProfileBase _profile;
     private AirVRVideoFrameRenderer _videoFrameRenderer;
 	private AirVRClientStateMachine _stateMachine;
         
@@ -151,7 +167,7 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
             throw new UnityException("[ERROR] Must set AirVRClient.Delegate.");
         }
         AirVRClientLicenseFile licenseFile = new AirVRClientLicenseFile("client.license");
-        int result = onairvr_Init(licenseFile.path, AudioSettings.outputSampleRate, _profile.hasInput);
+        int result = ocs_Init(licenseFile.path, AudioSettings.outputSampleRate, _profile.hasInput);
         if (result < 0 && result != -4) {
             Delegate.AirVRClientFailed("failed to init AirVRClient : " + result);
         }
@@ -191,7 +207,7 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
         if (_eventDispatcher != null) {
             _eventDispatcher.MessageReceived -= onAirVRMessageReceived;
         }
-		onairvr_Cleanup();
+		ocs_Cleanup();
 	}
 
 	// handle AirVRMessages
@@ -226,7 +242,7 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
 	}
 	
     private void onAirVRSetupResponded(AirVRClientMessage message) {
-		GL.IssuePluginEvent(onairvr_PrepareRender_RenderThread_Func(), _profile.useSeperateVideoRenderTarget ? 1 : 0);
+		GL.IssuePluginEvent(ocs_PrepareRender_RenderThread_Func(), _profile.useSeperateVideoRenderTarget ? 1 : 0);
 	}
 
     private void onAirVRRenderPrepared(AirVRClientMessage message) {
@@ -234,7 +250,7 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
             System.IntPtr texture = System.IntPtr.Zero;
             int width = 0, height = 0;
 
-            if (onairvr_GetVideoRenderTargetTexture(ref texture, ref width, ref height)) {
+            if (ocs_GetVideoRenderTargetTexture(ref texture, ref width, ref height)) {
                 _videoFrameRenderer.SetVideoFrameTexture(Texture2D.CreateExternalTexture(width, height, TextureFormat.RGBA32, false, false, texture));
                 _videoFrameRenderer.enabled = true;
             }
@@ -268,10 +284,10 @@ public class AirVRClient : MonoBehaviour, AirVRClientStateMachine.Context {
 	
 	// implements AirVRClientStateMachine.Context
 	void AirVRClientStateMachine.Context.RequestPlay() {
-		onairvr_RequestPlay();
+		ocs_RequestPlay();
 	}
 
 	void AirVRClientStateMachine.Context.RequestStop() {
-		onairvr_RequestStop();
+		ocs_RequestStop();
 	}
 }

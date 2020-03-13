@@ -1,6 +1,6 @@
 ﻿/***********************************************************
 
-  Copyright (c) 2017-2018 Clicked, Inc.
+  Copyright (c) 2017-present Clicked, Inc.
 
   Licensed under the MIT license found in the LICENSE file 
   in the Docs folder of the distributed package.
@@ -16,48 +16,48 @@ using UnityEngine.Assertions;
 
 public class AirVRClientInputStream : AirVRInputStream {
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern byte onairvr_RegisterInputSender(string name, string args);
+    private static extern byte ocs_RegisterInputSender(string name, string options);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_UnregisterInputSender(byte id);
+    private static extern void ocs_UnregisterInputSender(byte id);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_PendInputTouch(byte deviceID, byte controlID, float posX, float posY, float touch, byte policy);
+    private static extern void ocs_BeginPendInput(ref long timestamp);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_PendInputTransform(byte deviceID, byte controlID, float posX, float posY, float posZ, 
+    private static extern void ocs_PendInputTransform(byte deviceID, byte controlID, float posX, float posY, float posZ, 
                                                           float rotX, float rotY, float rotZ, float rotW, byte policy);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_PendInputFloat4(byte deviceID, byte controlID, float x, float y, float z, float w, byte policy);
+    private static extern void ocs_PendInputFloat4(byte deviceID, byte controlID, float x, float y, float z, float w, byte policy);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_PendInputFloat3(byte deviceID, byte controlID, float x, float y, float z, byte policy);
+    private static extern void ocs_PendInputFloat3(byte deviceID, byte controlID, float x, float y, float z, byte policy);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_PendInputFloat2(byte deviceID, byte controlID, float x, float y, byte policy);
+    private static extern void ocs_PendInputFloat2(byte deviceID, byte controlID, float x, float y, byte policy);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_PendInputFloat(byte deviceID, byte controlID, float value, byte policy);
+    private static extern void ocs_PendInputFloat(byte deviceID, byte controlID, float value, byte policy);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern bool onairvr_GetTrackedDeviceFeedback(byte deviceID, byte controlID, 
+    private static extern bool ocs_GetTrackedDeviceFeedback(byte deviceID, byte controlID, 
                                                                 ref float worldRayOriginX, ref float worldRayOriginY, ref float worldRayOriginZ,
                                                                 ref float worldHitPositionX, ref float worldHitPositionY, ref float worldHitPositionZ,
                                                                 ref float worldHitNormalX, ref float worldHitNormalY, ref float worldHitNormalZ);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_BeginGatherInput(ref long timestamp);
-    
-    [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_SendPendingInputs(long gatherTimestamp);
+    private static extern void ocs_BeginGatherInput(ref long timestamp);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_ResetInput();
+    private static extern void ocs_SendPendingInputs(long timestamp);
+
+    [DllImport(AirVRClient.LibPluginName)]
+    private static extern void ocs_ResetInput();
 
     public override void Init() {
         foreach (var key in senders.Keys) {
-            senders[key].OnRegistered(onairvr_RegisterInputSender(senders[key].name, senders[key].options));
+            senders[key].OnRegistered(ocs_RegisterInputSender(senders[key].name, senders[key].options));
         }
 
         base.Init();
@@ -86,7 +86,7 @@ public class AirVRClientInputStream : AirVRInputStream {
         if (senders.ContainsKey(sender.name) == false) {
             senders.Add(sender.name, sender);
             if (initialized) {
-                sender.OnRegistered(onairvr_RegisterInputSender(sender.name, sender.options));
+                sender.OnRegistered(ocs_RegisterInputSender(sender.name, sender.options));
             }
         }
     }
@@ -94,7 +94,7 @@ public class AirVRClientInputStream : AirVRInputStream {
     public void DisableInputSender(AirVRInputSender sender) {
         if (senders.ContainsKey(sender.name)) {
             if (sender.isRegistered) {
-                onairvr_UnregisterInputSender((byte)sender.deviceID);
+                ocs_UnregisterInputSender((byte)sender.deviceID);
                 sender.OnUnregistered();
             }
             senders.Remove(sender.name);
@@ -102,39 +102,39 @@ public class AirVRClientInputStream : AirVRInputStream {
     }
 
     // implements AirVRInputStreaming
-    protected override float sendingRatePerSec {
+    protected override float maxSendingRatePerSec {
         get {
-            return 60.0f;
+            return 90.0f;
         }
     }
 
-    protected override void UnregisterInputSenderImpl(byte id) {
-        onairvr_UnregisterInputSender(id);
+    protected override void BeginPendInputImpl(ref long timestamp) {
+        ocs_BeginPendInput(ref timestamp);
     }
 
-    protected override void PendInputTouchImpl(byte deviceID, byte controlID, Vector2 position, float touch, byte policy) {
-        onairvr_PendInputTouch(deviceID, controlID, position.x, position.y, touch, policy);
+    protected override void UnregisterInputSenderImpl(byte id) {
+        ocs_UnregisterInputSender(id);
     }
 
     protected override void PendInputTransformImpl(byte deviceID, byte controlID, Vector3 position, Quaternion orientation, byte policy) {
-        onairvr_PendInputTransform(deviceID, controlID, position.x, position.y, position.z,
+        ocs_PendInputTransform(deviceID, controlID, position.x, position.y, position.z,
                            orientation.x, orientation.y, orientation.z, orientation.w, policy);
     }
 
     protected override void PendInputFloat4Impl(byte deviceID, byte controlID, Vector4 value, byte policy) {
-        onairvr_PendInputFloat4(deviceID, controlID, value.x, value.y, value.z, value.w, policy);
+        ocs_PendInputFloat4(deviceID, controlID, value.x, value.y, value.z, value.w, policy);
     }
 
     protected override void PendInputFloat3Impl(byte deviceID, byte controlID, Vector3 value, byte policy) {
-        onairvr_PendInputFloat3(deviceID, controlID, value.x, value.y, value.z, policy);
+        ocs_PendInputFloat3(deviceID, controlID, value.x, value.y, value.z, policy);
     }
 
     protected override void PendInputFloat2Impl(byte deviceID, byte controlID, Vector2 value, byte policy) {
-        onairvr_PendInputFloat2(deviceID, controlID, value.x, value.y, policy);
+        ocs_PendInputFloat2(deviceID, controlID, value.x, value.y, policy);
     }
 
     protected override void PendInputFloatImpl(byte deviceID, byte controlID, float value, byte policy) {
-        onairvr_PendInputFloat(deviceID, controlID, value, policy);
+        ocs_PendInputFloat(deviceID, controlID, value, policy);
     }
 
     protected override void PendTrackedDeviceFeedbackImpl(byte deviceID, byte controlID, Vector3 worldRayOrigin, Vector3 worldHitPosition, Vector3 worldHitNormal, byte policy) {
@@ -172,21 +172,21 @@ public class AirVRClientInputStream : AirVRInputStream {
     }
 
     protected override bool GetTrackedDeviceFeedbackImpl(byte deviceID, byte controlID, ref Vector3 worldRayOrigin, ref Vector3 worldHitPosition, ref Vector3 worldHitNormal) {
-        return onairvr_GetTrackedDeviceFeedback(deviceID, controlID, 
+        return ocs_GetTrackedDeviceFeedback(deviceID, controlID, 
                                                 ref worldRayOrigin.x, ref worldRayOrigin.y, ref worldRayOrigin.z,
                                                 ref worldHitPosition.x, ref worldHitPosition.y, ref worldHitPosition.z,
                                                 ref worldHitNormal.x, ref worldHitNormal.y, ref worldHitNormal.z);
     }
 
     protected override void BeginGatherInputImpl(ref long timestamp) {
-        onairvr_BeginGatherInput(ref timestamp);
+        ocs_BeginGatherInput(ref timestamp);
     }
 
-    protected override void SendPendingInputEventsImpl(long gatherTimestamp) {
-        onairvr_SendPendingInputs(gatherTimestamp);
+    protected override void SendPendingInputEventsImpl(long timestamp) {
+        ocs_SendPendingInputs(timestamp);
     }
 
     protected override void ResetInputImpl() {
-        onairvr_ResetInput();
+        ocs_ResetInput();
     }
 }

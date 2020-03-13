@@ -11,10 +11,10 @@ using UnityEngine.XR;
 
 public class MotionDataProvider : MonoBehaviour {
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_BeginGatherInput(ref long timestamp);
+    private static extern void ocs_BeginGatherInput(ref long timestamp);
 
     [DllImport(AirVRClient.LibPluginName)]
-    private static extern void onairvr_BeginGatherInputWithTimestamp(long timestamp);
+    private static extern void ocs_BeginGatherInputWithTimestamp(long timestamp);
 
     [Serializable]
     private class PredictionConfig {
@@ -169,7 +169,7 @@ public class MotionDataProvider : MonoBehaviour {
         int lastIndex = _motionData.Count - 1;
 
         long timestamp = 0;
-        onairvr_BeginGatherInput(ref timestamp);
+        ocs_BeginGatherInput(ref timestamp);
 
         MotionData.SetTimestamp(_motionData[lastIndex], timestamp);
         MotionData.SetOrientation(_motionData[lastIndex], InputTracking.GetLocalRotation(XRNode.CenterEye));
@@ -184,7 +184,7 @@ public class MotionDataProvider : MonoBehaviour {
         Quaternion baseSensorOrientation = MotionData.GetOrientation(_motionData[_motionData.Count - 1]);
 
         for (int i = 0; i < _motionData.Count; i++) {
-            onairvr_BeginGatherInputWithTimestamp(MotionData.GetTimestamp(_motionData[i]));
+            ocs_BeginGatherInputWithTimestamp(MotionData.GetTimestamp(_motionData[i]));
 
             MotionData.SetOrientation(_motionData[i], baseOvrOrientation *
                                                       Quaternion.Inverse(baseSensorOrientation) *
@@ -197,9 +197,35 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     private void sendMotionData(byte[] data) {
-        _msgMotionData.InitPool(data.Length + _cameraProjection.Length);
-        Array.Copy(data, _msgMotionData.Data, data.Length);
-        Array.Copy(_cameraProjection, 0, _msgMotionData.Data, data.Length, _cameraProjection.Length);
+        var leftEyePosition = InputTracking.GetLocalPosition(XRNode.LeftEye);
+        var rightEyePosition = InputTracking.GetLocalPosition(XRNode.RightEye);
+        var rightHandPosition = OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch);
+        var rightHandOrientation = OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch);
+
+        float[] positions = {
+            leftEyePosition.x, leftEyePosition.y, leftEyePosition.z,
+            rightEyePosition.x, rightEyePosition.y, rightEyePosition.z,
+            rightHandPosition.x, rightHandPosition.y, rightHandPosition.z
+        };
+        float[] handOrientation = {
+            rightHandOrientation.x, rightHandOrientation.y, rightHandOrientation.z, rightHandOrientation.w
+        };
+
+        const int PositionLength = 4 * 3;
+        const int OrientationLength = 4 * 4;
+
+        _msgMotionData.InitPool(data.Length + 
+                                _cameraProjection.Length + 
+                                PositionLength * 3 + 
+                                OrientationLength);
+        int offset = 0;
+        Buffer.BlockCopy(data, 0, _msgMotionData.Data, offset, data.Length);                                offset += data.Length;
+        Buffer.BlockCopy(_cameraProjection, 0, _msgMotionData.Data, offset, _cameraProjection.Length);      offset += _cameraProjection.Length;
+
+        offset = MotionData.SetPosition(_msgMotionData.Data, offset, InputTracking.GetLocalPosition(XRNode.LeftEye));
+        offset = MotionData.SetPosition(_msgMotionData.Data, offset, InputTracking.GetLocalPosition(XRNode.RightEye));
+        offset = MotionData.SetPosition(_msgMotionData.Data, offset, OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch));
+        MotionData.SetOrientation(_msgMotionData.Data, offset, OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch));
 
         _zmqPushMotionData.TrySend(ref _msgMotionData, TimeSpan.Zero, false);
     }

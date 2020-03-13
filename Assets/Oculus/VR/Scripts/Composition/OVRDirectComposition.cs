@@ -28,12 +28,12 @@ public class OVRDirectComposition : OVRCameraComposition
 	public override OVRManager.CompositionMethod CompositionMethod() { return OVRManager.CompositionMethod.Direct; }
 
 	public OVRDirectComposition(GameObject parentObject, Camera mainCamera, OVRManager.CameraDevice cameraDevice, bool useDynamicLighting, OVRManager.DepthQuality depthQuality)
-		: base(cameraDevice, useDynamicLighting, depthQuality)
+		: base(parentObject, mainCamera, cameraDevice, useDynamicLighting, depthQuality)
 	{
 		Debug.Assert(directCompositionCameraGameObject == null);
 		directCompositionCameraGameObject = new GameObject();
 		directCompositionCameraGameObject.name = "MRDirectCompositionCamera";
-		directCompositionCameraGameObject.transform.parent = parentObject.transform;
+		directCompositionCameraGameObject.transform.parent = cameraInTrackingSpace ? cameraRig.trackingSpace : parentObject.transform;
 		directCompositionCamera = directCompositionCameraGameObject.AddComponent<Camera>();
 		directCompositionCamera.stereoTargetEye = StereoTargetEyeMask.None;
 		directCompositionCamera.depth = float.MaxValue;
@@ -76,31 +76,47 @@ public class OVRDirectComposition : OVRCameraComposition
 
 		if (OVRMixedReality.useFakeExternalCamera || OVRPlugin.GetExternalCameraCount() == 0)
 		{
-			OVRPose worldSpacePose = new OVRPose();
 			OVRPose trackingSpacePose = new OVRPose();
-			trackingSpacePose.position = OVRMixedReality.fakeCameraPositon;
+			trackingSpacePose.position = OVRManager.instance.trackingOriginType == OVRManager.TrackingOrigin.EyeLevel ? 
+				OVRMixedReality.fakeCameraEyeLevelPosition : 
+				OVRMixedReality.fakeCameraFloorLevelPosition;
 			trackingSpacePose.orientation = OVRMixedReality.fakeCameraRotation;
-			worldSpacePose = OVRExtensions.ToWorldSpacePose(trackingSpacePose);
-
 			directCompositionCamera.fieldOfView = OVRMixedReality.fakeCameraFov;
 			directCompositionCamera.aspect = OVRMixedReality.fakeCameraAspect;
-			directCompositionCamera.transform.FromOVRPose(worldSpacePose);
+			if (cameraInTrackingSpace)
+			{
+				directCompositionCamera.transform.FromOVRPose(trackingSpacePose, true);
+			}
+			else
+			{
+				OVRPose worldSpacePose = new OVRPose();
+				worldSpacePose = OVRExtensions.ToWorldSpacePose(trackingSpacePose);
+				directCompositionCamera.transform.FromOVRPose(worldSpacePose);
+			}
 		}
 		else
 		{
 			OVRPlugin.CameraExtrinsics extrinsics;
 			OVRPlugin.CameraIntrinsics intrinsics;
+			OVRPlugin.Posef calibrationRawPose;
 
 			// So far, only support 1 camera for MR and always use camera index 0
-			if (OVRPlugin.GetMixedRealityCameraInfo(0, out extrinsics, out intrinsics))
+			if (OVRPlugin.GetMixedRealityCameraInfo(0, out extrinsics, out intrinsics, out calibrationRawPose))
 			{
-				OVRPose worldSpacePose = ComputeCameraWorldSpacePose(extrinsics);
-
 				float fovY = Mathf.Atan(intrinsics.FOVPort.UpTan) * Mathf.Rad2Deg * 2;
 				float aspect = intrinsics.FOVPort.LeftTan / intrinsics.FOVPort.UpTan;
 				directCompositionCamera.fieldOfView = fovY;
 				directCompositionCamera.aspect = aspect;
-				directCompositionCamera.transform.FromOVRPose(worldSpacePose);
+				if (cameraInTrackingSpace)
+				{
+					OVRPose trackingSpacePose = ComputeCameraTrackingSpacePose(extrinsics, calibrationRawPose);
+					directCompositionCamera.transform.FromOVRPose(trackingSpacePose, true);
+				}
+				else
+				{
+					OVRPose worldSpacePose = ComputeCameraWorldSpacePose(extrinsics, calibrationRawPose);
+					directCompositionCamera.transform.FromOVRPose(worldSpacePose);
+				}
 			}
 			else
 			{

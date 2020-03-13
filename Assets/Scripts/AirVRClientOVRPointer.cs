@@ -1,6 +1,6 @@
 ﻿/***********************************************************
 
-  Copyright (c) 2017-2018 Clicked, Inc.
+  Copyright (c) 2017-present Clicked, Inc.
 
   Licensed under the MIT license found in the LICENSE file 
   in the root folder of the project.
@@ -21,7 +21,7 @@ public class AirVRClientOVRPointer : MonoBehaviour
     [SerializeField] private Transform _centerEyeAnchor = null;
     [SerializeField] private Transform _leftHandAnchor = null;
     [SerializeField] private Transform _rightHandAnchor = null;
-    
+
     [Header("Selection Ray")]
     public bool ShowSelectionRay = true;
     [SerializeField] private LineRenderer _lineRenderer = null;
@@ -29,90 +29,86 @@ public class AirVRClientOVRPointer : MonoBehaviour
 
     private Transform _rayTransform;
 
-    public bool ControllerIsConnected
-    {
-        get
-        {
-            OVRInput.Controller controller = OVRInput.GetConnectedControllers() & (OVRInput.Controller.LTrackedRemote | OVRInput.Controller.RTrackedRemote);
-            return controller == OVRInput.Controller.LTrackedRemote || controller == OVRInput.Controller.RTrackedRemote;
+    public bool isControllerConnected {
+        get {
+            return AirVROVRInputHelper.IsConnected(OVRInput.Controller.LTouch) || 
+                AirVROVRInputHelper.IsConnected(OVRInput.Controller.RTouch);
         }
     }
 
-    public OVRInput.Controller Controller
-    {
-        get
-        {
-            OVRInput.Controller controller = OVRInput.GetConnectedControllers();
-            if ((controller & OVRInput.Controller.LTrackedRemote) == OVRInput.Controller.LTrackedRemote)
-            {
-                return OVRInput.Controller.LTrackedRemote;
+    public OVRInput.Controller controller {
+        get {
+            OVRInput.Controller controllers = OVRInput.GetConnectedControllers();
+            var right = AirVROVRInputHelper.ParseController(OVRInput.Controller.RTouch);
+            if (AirVROVRInputHelper.IsConnected(right)) {
+                return right;
             }
-            else if ((controller & OVRInput.Controller.RTrackedRemote) == OVRInput.Controller.RTrackedRemote)
-            {
-                return OVRInput.Controller.RTrackedRemote;
+            var left = AirVROVRInputHelper.ParseController(OVRInput.Controller.LTouch);
+            if (AirVROVRInputHelper.IsConnected(left)) {
+                return left;
             }
             return OVRInput.GetActiveController();
         }
     }
 
-    private void Awake()
-    {
+    private void Awake() {
         _rayTransform = _centerEyeAnchor;       
     }
 
-    private void Update()
-    {
-        Vector3 worldStartPoint = Vector3.zero;
-        Vector3 worldEndPoint = Vector3.zero;
-
-        if (_lineRenderer != null)
-        {
-            _lineRenderer.enabled = ControllerIsConnected && ShowSelectionRay && !AirVRClient.connected;
+    private void Update() {
+        if (AirVRClient.connected) {
+            if (_lineRenderer != null) {
+                _lineRenderer.enabled = false;
+            }
+            return;
         }
 
-        if (ControllerIsConnected && !AirVRClient.connected)
-        {
-            if (_rayTransform == _centerEyeAnchor)
-            {
-                if (Controller == OVRInput.Controller.LTrackedRemote)
-                {
-                    _rayTransform = _leftHandAnchor;
-                }
-                else if (Controller == OVRInput.Controller.RTrackedRemote)
-                {
-                    _rayTransform = _rightHandAnchor;
-                }
-
-                _gazePointer.rayTransform = _rayTransform;
-                _inputModule.rayTransform = _rayTransform;
+        Transform newRayTransform;
+        if (isControllerConnected) {
+            if (controller == AirVROVRInputHelper.ParseController(OVRInput.Controller.RTouch)) {
+                newRayTransform = _rightHandAnchor;
             }
-
-            if (_trackingSpace != null)
-            {
-                Matrix4x4 localToWorld = _trackingSpace.localToWorldMatrix;
-                Quaternion orientation = OVRInput.GetLocalControllerRotation(Controller);
-
-                Vector3 localStartPoint = OVRInput.GetLocalControllerPosition(Controller);
-                Vector3 localEndPoint = localStartPoint + orientation * Vector3.forward * _maxRayLength;
-
-                worldStartPoint = localToWorld.MultiplyPoint(localStartPoint);
-                worldEndPoint = localToWorld.MultiplyPoint(localEndPoint);
+            else if (controller == AirVROVRInputHelper.ParseController(OVRInput.Controller.LTouch)) {
+                newRayTransform = _leftHandAnchor;
             }
+            else {
+                newRayTransform = _centerEyeAnchor;
+            }
+        }
+        else {
+            newRayTransform = _centerEyeAnchor;
+        }
 
-            if (_lineRenderer != null)
-            {
+        if (_rayTransform != newRayTransform) {
+            _rayTransform = newRayTransform;
+
+            _gazePointer.rayTransform = _rayTransform;
+            _inputModule.rayTransform = _rayTransform;
+        }
+
+        if (_lineRenderer != null) {
+            _lineRenderer.enabled = _rayTransform != _centerEyeAnchor && ShowSelectionRay;
+
+            if (_lineRenderer.enabled) {
+                Vector3 worldStartPoint = Vector3.zero;
+                Vector3 worldEndPoint = Vector3.zero;
+
+                if (_trackingSpace != null) {
+                    Matrix4x4 localToWorld = _trackingSpace.localToWorldMatrix;
+                    Quaternion orientation = OVRInput.GetLocalControllerRotation(controller);
+
+                    Vector3 localStartPoint = OVRInput.GetLocalControllerPosition(controller);
+                    if (AirVROVRInputHelper.GetHeadsetType() == AirVROVRInputHelper.HeadsetType.Quest) {
+                        localStartPoint += orientation * Vector3.down * 0.01f;
+                    }
+                    Vector3 localEndPoint = localStartPoint + orientation * Vector3.forward * _maxRayLength;
+
+                    worldStartPoint = localToWorld.MultiplyPoint(localStartPoint);
+                    worldEndPoint = localToWorld.MultiplyPoint(localEndPoint);
+                }
+
                 _lineRenderer.SetPosition(0, worldStartPoint);
                 _lineRenderer.SetPosition(1, worldEndPoint);
-            }
-        }
-        else
-        {
-            if (_rayTransform != _centerEyeAnchor)
-            {
-                _rayTransform = _centerEyeAnchor;
-
-                _gazePointer.rayTransform = _rayTransform;
-                _inputModule.rayTransform = _rayTransform;
             }
         }
     }

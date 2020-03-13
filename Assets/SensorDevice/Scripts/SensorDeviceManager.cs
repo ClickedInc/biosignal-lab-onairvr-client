@@ -10,7 +10,7 @@ public class MotionData {
 
 	public static Quaternion GetOrientation(byte[] data) {
 		byte[] bytes = new byte[4 * 4];
-		Array.Copy(data, OrientationStart, bytes, 0, 4 * 4);
+		Buffer.BlockCopy(data, OrientationStart, bytes, 0, 4 * 4);
 
 		Quaternion result = Quaternion.identity;
 		for (int i = 0; i < 4; i++) {
@@ -24,22 +24,42 @@ public class MotionData {
 		return result;
 	}
 
+    public static int SetPosition(byte[] data, int offset, Vector3 position) {
+        int next = offset;
+        for (int i = 0; i < 3; i++) {
+            byte[] bytes = BitConverter.GetBytes(position[i]);
+            if (BitConverter.IsLittleEndian) {
+                Array.Reverse(bytes);
+            }
+            Buffer.BlockCopy(bytes, 0, data, offset + i * 4, 4);
+            next += 4;
+        }
+        return next;
+    }
+
 	public static void SetOrientation(byte[] data, Quaternion orientation) {
-		for (int i = 0; i < 4; i++) {
-			// convert Unity to OpenGL
-			byte[] bytes = BitConverter.GetBytes(
-				(i == 0 || i == 1 ? -1.0f : 1.0f) * orientation[i]
-			);
-			if (BitConverter.IsLittleEndian) {
-				Array.Reverse(bytes);
-			}
-			Array.Copy(bytes, 0, data, OrientationStart + i * 4, 4);
-		}
+        SetOrientation(data, OrientationStart, orientation);
 	}
+
+    public static int SetOrientation(byte[] data, int offset, Quaternion orientation) {
+        int next = offset;
+        for (int i = 0; i < 4; i++) {
+            // convert Unity to OpenGL
+            byte[] bytes = BitConverter.GetBytes(
+                (i == 0 || i == 1 ? -1.0f : 1.0f) * orientation[i]
+            );
+            if (BitConverter.IsLittleEndian) {
+                Array.Reverse(bytes);
+            }
+            Buffer.BlockCopy(bytes, 0, data, offset + i * 4, 4);
+            next += 4;
+        }
+        return next;
+    }
 
 	public static long GetTimestamp(byte[] data) {
 		byte[] bytes = new byte[8];
-		Array.Copy(data, TimestampStart, bytes, 0, 8);
+		Buffer.BlockCopy(data, TimestampStart, bytes, 0, 8);
 
 		if (BitConverter.IsLittleEndian) {
 			Array.Reverse(bytes);
@@ -52,7 +72,7 @@ public class MotionData {
         if (BitConverter.IsLittleEndian) {
             Array.Reverse(bytes);
         }
-        Array.Copy(bytes, 0, data, TimestampStart, bytes.Length);
+        Buffer.BlockCopy(bytes, 0, data, TimestampStart, bytes.Length);
     }
 
 	public static string ToString(byte[] data) {
@@ -66,7 +86,7 @@ public class MotionData {
 		byte[] converted = data;
 		if (BitConverter.IsLittleEndian) {
 			converted = new byte[data.Length];
-			Array.Copy(data, converted, converted.Length);
+			Buffer.BlockCopy(data, 0, converted, 0, converted.Length);
 
 			for (int i = biosignalStart; i < timeStampStart; i += 4) {
 				Array.Reverse(converted, i, 4);
@@ -119,6 +139,6 @@ public class SensorDeviceManager : MonoBehaviour {
 	}
 
 	public byte[] getNextMotionData() {
-		return _manager.Call<byte[]>("getNextMotionData");
+        return (byte[])(Array)_manager.Call<sbyte[]>("getNextMotionData");
 	}
 }

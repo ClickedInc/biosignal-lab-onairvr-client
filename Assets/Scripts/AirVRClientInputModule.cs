@@ -1,6 +1,6 @@
 ﻿/***********************************************************
 
-  Copyright (c) 2017-2018 Clicked, Inc.
+  Copyright (c) 2017-present Clicked, Inc.
 
   Licensed under the MIT license found in the LICENSE file 
   in the root folder of the project.
@@ -14,9 +14,15 @@ public class AirVRClientInputModule : OVRInputModule
 {
     protected override PointerEventData.FramePressState GetGazeButtonState()
     {
-        var pressed = OVRInput.GetDown(OVRInput.Button.One) || OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger) || Input.GetKeyDown(gazeClickKey);
-        var released = OVRInput.GetUp(OVRInput.Button.One) || OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger) || Input.GetKeyUp(gazeClickKey);
-
+        var pressed = OVRInput.GetDown(OVRInput.Button.One) || 
+            OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger) ||
+            OVRInput.GetDown(OVRInput.Button.SecondaryIndexTrigger) ||
+            Input.GetKeyDown(gazeClickKey);
+        var released = OVRInput.GetUp(OVRInput.Button.One) || 
+            OVRInput.GetUp(OVRInput.Button.PrimaryIndexTrigger) ||
+            OVRInput.GetUp(OVRInput.Button.SecondaryIndexTrigger) ||
+            Input.GetKeyUp(gazeClickKey);
+        
         if (pressed && released)
             return PointerEventData.FramePressState.PressedAndReleased;
         if (pressed)

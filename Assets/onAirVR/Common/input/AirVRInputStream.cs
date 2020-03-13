@@ -1,6 +1,6 @@
 ﻿/***********************************************************
 
-  Copyright (c) 2017-2018 Clicked, Inc.
+  Copyright (c) 2017-present Clicked, Inc.
 
   Licensed under the MIT license found in the LICENSE file 
   in the Docs folder of the distributed package.
@@ -38,10 +38,8 @@ public abstract class AirVRInputBase {
 }
 
 public abstract class AirVRInputSender : AirVRInputBase {
-    public virtual string options {
-        get { return null; }
-    }
-    
+    public virtual string options { get { return null; } }
+
     public abstract void PendInputsPerFrame(AirVRInputStream inputStream);
 }
 
@@ -75,10 +73,11 @@ public abstract class AirVRInputStream {
         }
     }
 
-    protected abstract float sendingRatePerSec { get; }
+    protected abstract float maxSendingRatePerSec { get; }
     protected abstract void UnregisterInputSenderImpl(byte id);
 
-    protected abstract void PendInputTouchImpl(byte deviceID, byte controlID, Vector2 position, float touch, byte policy);
+    protected abstract void BeginPendInputImpl(ref long timestamp);
+
     protected abstract void PendInputTransformImpl(byte deviceID, byte controlID, Vector3 position, Quaternion orientation, byte policy);
     protected abstract void PendTrackedDeviceFeedbackImpl(byte deviceID, byte controlID, 
                                                           Vector3 worldRayOrigin, Vector3 worldHitPosition, Vector3 worldHitNormal, byte policy); 
@@ -97,12 +96,12 @@ public abstract class AirVRInputStream {
     protected abstract bool GetInputFloatImpl(byte deviceID, byte controlID, ref float value);
 
     protected abstract void BeginGatherInputImpl(ref long timestamp);
-    protected abstract void SendPendingInputEventsImpl(long gatherTimestamp);
+    protected abstract void SendPendingInputEventsImpl(long timestamp);
     protected abstract void ResetInputImpl();
 
 
     public virtual void Init() {
-        _timer.Set(sendingRatePerSec);
+        _timer.Set(maxSendingRatePerSec);
     }
 
     public virtual void Start() {
@@ -148,7 +147,8 @@ public abstract class AirVRInputStream {
     public void PendTouch(AirVRInputSender sender, byte controlID, Vector2 position, bool touch) {
         Assert.IsTrue(sender.isRegistered);
 
-        PendInputTouchImpl((byte)sender.deviceID, controlID, position, touch ? 1.0f : 0.0f, (byte)SendingPolicy.NonzeroAlwaysZeroOnce);
+        var value = new Vector3(position.x, position.y, touch ? 1.0f : 0.0f);
+        PendInputFloat3Impl((byte)sender.deviceID, controlID, value, (byte)SendingPolicy.NonzeroAlwaysZeroOnce);
     }
 
     public void GetTouch(AirVRInputReceiver receiver, byte controlID, out Vector2 position, out bool touch) {
@@ -311,7 +311,7 @@ public abstract class AirVRInputStream {
             if (_timer.expired) {
                 long timestamp = 0;
                 BeginGatherInputImpl(ref timestamp);
-                
+
                 foreach (var key in senders.Keys) {
                     senders[key].PendInputsPerFrame(this);
                 }

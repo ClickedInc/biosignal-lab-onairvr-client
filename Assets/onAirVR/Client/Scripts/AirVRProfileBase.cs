@@ -1,6 +1,6 @@
 ﻿/***********************************************************
 
-  Copyright (c) 2017-2018 Clicked, Inc.
+  Copyright (c) 2017-present Clicked, Inc.
 
   Licensed under the MIT license found in the LICENSE file 
   in the Docs folder of the distributed package.
@@ -8,38 +8,16 @@
  ***********************************************************/
 
 using System;
+using System.IO;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-[System.Serializable]
+[Serializable]
 public abstract class AirVRProfileBase {
-    [Serializable]
-    private class ProfilerConfig {
-        public string reportEndpoint;
-        public int latencySimulation;
-    }
-
-    [Serializable]
-    private class ProfilerConfigReader {
-        [SerializeField] private ProfilerConfig profiler;
-
-        public bool ReadConfig(string fileFrom, ProfilerConfig to) {
-            try {
-                profiler = to;
-                JsonUtility.FromJsonOverwrite(File.ReadAllText(fileFrom), this);
-
-                return true;
-            }
-            catch (Exception e) {
-                Debug.Log("[WARNING failed to read profiler config : " + e.ToString());
-            }
-
-            return false;
-        }
-    }
+    private const int ProfilerMaskFrame = 0x01;
+    private const int ProfilerMaskReport = 0x02;
 
     public enum RenderType {
         DirectOnTwoEyeTextures,
@@ -48,25 +26,23 @@ public abstract class AirVRProfileBase {
 
 #pragma warning disable CS0414
     [SerializeField] private string UserID;
+    [SerializeField] private int VideoBitrate;
+    [SerializeField] private int Profilers;
+    [SerializeField] private string ProfilerLogPostfix;
     [SerializeField] private string[] SupportedVideoCodecs;
     [SerializeField] private string[] SupportedAudioCodecs;
-    [SerializeField] private int EyeTextureSize;
+    [SerializeField] private int EyeTextureWidth;
+    [SerializeField] private int EyeTextureHeight;
     [SerializeField] private int VideoWidth;
     [SerializeField] private int VideoHeight;
     [SerializeField] private float VideoFrameRate;
     [SerializeField] private float IPD;
     [SerializeField] private bool Stereoscopy;
-    [SerializeField] private bool IsEyeCameraFrustumSymmetric;
-    [SerializeField] private float EyeCameraVerticalFOV;
-    [SerializeField] private float EyeCameraAspectRatio;
     [SerializeField] private float[] LeftEyeCameraNearPlane;
     [SerializeField] private Vector3 EyeCenterPosition;
 
     [SerializeField] private int[] LeftEyeViewport;
     [SerializeField] private int[] RightEyeViewport;
-    [SerializeField] private float[] VideoRenderMeshVertices;
-    [SerializeField] private float[] VideoRenderMeshTexCoords;
-    [SerializeField] private int[] VideoRenderMeshIndices;
     [SerializeField] private float[] VideoScale;
 
     [SerializeField] private string ProfileReportEndpoint;
@@ -86,23 +62,19 @@ public abstract class AirVRProfileBase {
                     foreach (string type in types) {
                         if (type.Equals("video/avc")) {
                             supportAVC = true;
-                        }
-                        else if (type.Equals("video/hevc")) {
+                        } else if (type.Equals("video/hevc")) {
                             supportHEVC = this.supportHEVC;
                         }
                     }
                 }
-            }
-            else {
+            } else {
                 supportAVC = supportHEVC = true;
             }
-
             Assert.IsTrue(supportHEVC || supportAVC);
             string[] result = new string[(supportHEVC && supportAVC) ? 2 : 1];
             if (supportHEVC) {
                 result[0] = "H265";
             }
-
             if (supportAVC) {
                 result[result.Length - 1] = "H264";
             }
@@ -112,7 +84,9 @@ public abstract class AirVRProfileBase {
     }
 
     private string[] supportedAudioCodecs {
-        get { return new string[] { "opus" }; }
+        get {
+            return new string[] { "opus" };
+        }
     }
 
     private float[] leftEyeCameraNearPlaneScaled {
@@ -128,14 +102,10 @@ public abstract class AirVRProfileBase {
         }
     }
 
-    public abstract int eyeTextureSize { get; }
-    public abstract int videoWidth { get; }
-    public abstract int videoHeight { get; }
-    public abstract float videoFrameRate { get; }
+    public abstract (int width, int height) eyeTextureSize { get; }
+    public abstract (int width, int height) videoResolution { get; }
+    public abstract float defaultVideoFrameRate { get; }
     public abstract bool stereoscopy { get; }
-    public abstract bool isEyeCameraFrustumSymmetric { get; }
-    public abstract float eyeCameraVerticalFieldOfView { get; } // valid for symmetric eye camera only
-    public abstract float eyeCameraAspectRatio { get; } // valid for symmetric eye camera only
     public abstract float[] leftEyeCameraNearPlane { get; }
     public abstract Vector3 eyeCenterPosition { get; }
     public abstract float ipd { get; }
@@ -144,8 +114,7 @@ public abstract class AirVRProfileBase {
     public abstract RenderType renderType { get; }
     public abstract int[] leftEyeViewport { get; }
     public abstract int[] rightEyeViewport { get; }
-
-    public abstract float[] videoScale { get; } // ratio of the size of the whole video rendered to the size of the area visible to an eye camera
+    public abstract float[] videoScale { get; }   // ratio of the size of the whole video rendered to the size of the area visible to an eye camera
 
     public abstract bool isUserPresent { get; }
     public abstract float delayToResumePlayback { get; }
@@ -153,8 +122,8 @@ public abstract class AirVRProfileBase {
     public virtual float[] videoRenderMeshVertices {
         get {
             return new float[] {
-                -0.5f, 0.5f, 0.0f,
-                0.5f, 0.5f, 0.0f,
+                -0.5f,  0.5f, 0.0f,
+                0.5f,  0.5f, 0.0f,
                 -0.5f, -0.5f, 0.0f,
                 0.5f, -0.5f, 0.0f
             };
@@ -181,68 +150,140 @@ public abstract class AirVRProfileBase {
     }
 
     public virtual bool supportHEVC {
-        get { return true; }
+        get {
+            return true;
+        }
     }
 
     public bool useSeperateVideoRenderTarget {
-        get { return renderType == RenderType.UseSeperateVideoRenderTarget; }
+        get {
+            return renderType == RenderType.UseSeperateVideoRenderTarget;
+        }
     }
 
     public bool useSingleTextureForEyes {
-        get { return renderType == RenderType.UseSeperateVideoRenderTarget; }
+        get {
+            return renderType == RenderType.UseSeperateVideoRenderTarget;
+        }
     }
 
     public string userID {
-        get { return UserID; }
-        set { UserID = value; }
+        get {
+            return UserID;
+        }
+        set {
+            UserID = value;
+        }
     }
 
-    public string profileReportEndpoint {
-        get { return ProfileReportEndpoint; }
+    public float videoFrameRate {
+        get {
+            return VideoFrameRate;
+        }
+        set {
+            VideoFrameRate = value;
+        }
     }
 
-    public int profileLatencySimulation {
-        get { return ProfileLatencySimulation; }
+    public int videoBitrate {
+        get {
+            return VideoBitrate;
+        }
+        set {
+            VideoBitrate = value;
+        }
     }
 
-	public AirVRProfileBase ParseConfig(string filename) {
-		if (File.Exists(filename)) {
-			ProfilerConfig config = new ProfilerConfig();
-			if (new ProfilerConfigReader().ReadConfig(filename, config)) {
-				ProfileReportEndpoint = config.reportEndpoint;
+    public string profiler {
+        get {
+            var profileFrame = (Profilers & ProfilerMaskFrame) != 0;
+            var profileReport = (Profilers & ProfilerMaskReport) != 0;
+
+            if (profileFrame && profileReport) {
+                return "full";
+            }
+            else if (profileFrame) {
+                return "frame";
+            }
+            else if (profileReport) {
+                return "report";
+            }
+            else {
+                return "";
+            }
+        }
+        set {
+            switch (value) {
+                case "full":
+                    Profilers = ProfilerMaskFrame | ProfilerMaskReport;
+                    break;
+                case "frame":
+                    Profilers = ProfilerMaskFrame;
+                    break;
+                case "report":
+                    Profilers = ProfilerMaskReport;
+                    break;
+                default:
+                    Profilers = 0;
+                    break;
+            }
+        }
+    }
+
+    public string profilerLogPostfix {
+        get {
+            return ProfilerLogPostfix;
+        }
+        set {
+            ProfilerLogPostfix = value;
+        }
+    }
+
+    public string profileReportEndpoint => ProfileReportEndpoint;
+    public int profileLatencySimulation => ProfileLatencySimulation;
+
+    public AirVRProfileBase ParseConfig(string filename) {
+        if (File.Exists(filename)) {
+            ProfilerConfig config = new ProfilerConfig();
+            if (new ProfilerConfigReader().ReadConfig(filename, config)) {
+                ProfileReportEndpoint = config.reportEndpoint;
                 ProfileLatencySimulation = config.latencySimulation;
-			}
-		}
+            }
+        }
 
-		return this;
-	}
+        return this;
+    }
 
-	public AirVRProfileBase GetSerializable() {
+    public AirVRProfileBase GetSerializable() {
+        var eyeTexSize = eyeTextureSize;
+        var resolution = videoResolution;
+
 		SupportedVideoCodecs = supportedVideoCodecs;
 		SupportedAudioCodecs = supportedAudioCodecs;
-        EyeTextureSize = eyeTextureSize;
-		VideoWidth = videoWidth;
-		VideoHeight = videoHeight;
+        EyeTextureWidth = eyeTexSize.width;
+        EyeTextureHeight = eyeTexSize.height;
+		VideoWidth = resolution.width;
+		VideoHeight = resolution.height;
 		VideoFrameRate = videoFrameRate;
         IPD = ipd;
 		Stereoscopy = stereoscopy;
-		IsEyeCameraFrustumSymmetric = isEyeCameraFrustumSymmetric;
-		EyeCameraVerticalFOV = eyeCameraVerticalFieldOfView;
-		EyeCameraAspectRatio = eyeCameraAspectRatio;
 		LeftEyeCameraNearPlane = leftEyeCameraNearPlane;
 		EyeCenterPosition = eyeCenterPosition;
 
 		LeftEyeViewport = leftEyeViewport;
 		RightEyeViewport = rightEyeViewport;
-		VideoRenderMeshVertices = videoRenderMeshVertices;
-		VideoRenderMeshTexCoords = videoRenderMeshTexCoords;
-		VideoRenderMeshIndices = videoRenderMeshIndices;
 		VideoScale = videoScale;
 
-		return this;
+        if (VideoFrameRate <= 0.0f) {
+            VideoFrameRate = defaultVideoFrameRate;
+        }
+
+        return this;
 	}
 
     public override string ToString () {
+        var resolution = videoResolution;
+
         return string.Format("[AirVRProfile]\n" +
                              "    videoWidth={0}\n" +
                              "    videoHeight={1}\n" +
@@ -251,26 +292,45 @@ public abstract class AirVRProfileBase {
                              "    render type={5}\n" +
                              "    leftEyeViewport=({6}, {7}, {8}, {9})\n" + 
                              "    rightEyeViewport=({10}, {11}, {12}, {13})\n" + 
-                             "    isEyeCameraFrustumSymmetric={14}\n" + 
-                             "    eyeCameraVerticalFieldOfView={15}\n" + 
-                             "    eyeCameraAspectRatio={16}\n" + 
-                             "    leftEyeCameraNearPlane=({17}, {18}, {19}, {20})\n" +
-                             "    eyeCenterPosition={21}\n" + 
-                             "    ipd={22}\n" + 
-                             "    stereoscopy={23}\n", 
-                             videoWidth, 
-                             videoHeight, 
+                             "    leftEyeCameraNearPlane=({14}, {15}, {16}, {17})\n" +
+                             "    eyeCenterPosition={18}\n" + 
+                             "    ipd={19}\n" + 
+                             "    stereoscopy={20}\n", 
+                             resolution.width, 
+                             resolution.height, 
                              videoFrameRate, 
                              videoScale[0], videoScale[1], 
                              renderType, 
                              leftEyeViewport[0], leftEyeViewport[1], leftEyeViewport[2], leftEyeViewport[3], 
                              rightEyeViewport[0], rightEyeViewport[1], rightEyeViewport[2], rightEyeViewport[3], 
-                             isEyeCameraFrustumSymmetric, 
-                             eyeCameraVerticalFieldOfView, 
-                             eyeCameraAspectRatio, 
                              leftEyeCameraNearPlane[0], leftEyeCameraNearPlane[1], leftEyeCameraNearPlane[2], leftEyeCameraNearPlane[3], 
                              eyeCenterPosition, 
                              ipd, 
                              stereoscopy);
+    }
+
+    [Serializable]
+    private class ProfilerConfig {
+        public string reportEndpoint;
+        public int latencySimulation;
+    }
+
+    [Serializable]
+    private class ProfilerConfigReader {
+        [SerializeField] private ProfilerConfig profiler;
+
+        public bool ReadConfig(string fileFrom, ProfilerConfig to) {
+            try {
+                profiler = to;
+                JsonUtility.FromJsonOverwrite(File.ReadAllText(fileFrom), this);
+
+                return true;
+            }
+            catch (Exception e) {
+                Debug.Log("[WARNING failed to read profiler config : " + e.ToString());
+            }
+
+            return false;
+        }
     }
 }

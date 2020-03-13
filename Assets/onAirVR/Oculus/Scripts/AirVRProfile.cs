@@ -1,6 +1,6 @@
 ﻿/***********************************************************
 
-  Copyright (c) 2017-2018 Clicked, Inc.
+  Copyright (c) 2017-present Clicked, Inc.
 
   Licensed under the MIT license found in the LICENSE file 
   in the Docs folder of the distributed package.
@@ -15,26 +15,21 @@ using UnityEngine.Assertions.Comparers;
 public class AirVRProfile : AirVRProfileBase {
 	private bool _userPresent;
 
-    public override int eyeTextureSize {
+    public override (int width, int height) eyeTextureSize {
         get {
-            OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
-            return (int)desc.resolution.x;
+            var desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
+
+            return ((int)desc.resolution.x, (int)desc.resolution.y);
         }
     }
 
-    public override int videoWidth { 
+    public override (int width, int height) videoResolution {
         get {
-            return 3940; // 2560;
+            return (3520, 1946);
         }
     }
 
-    public override int videoHeight { 
-        get {
-            return 1920; // 1280;
-        }
-    }
-
-    public override float videoFrameRate {
+    public override float defaultVideoFrameRate {
         get {
 #if !UNITY_EDITOR && UNITY_ANDROID
             AndroidJavaClass jc = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
@@ -53,34 +48,16 @@ public class AirVRProfile : AirVRProfileBase {
 		}
 	}
 
-    public override bool isEyeCameraFrustumSymmetric { 
-        get {
-            return true;
-        }
-    }
-
-    public override float eyeCameraVerticalFieldOfView { 
-        get {
-            OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
-            return Mathf.Atan(Mathf.Tan(desc.fov.y / 2 * Mathf.Deg2Rad) * videoScale[1]) * 2 * Mathf.Rad2Deg;
-        }
-    }
-
-    public override float eyeCameraAspectRatio { 
-        get {
-            OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
-            return (float)desc.resolution.x / desc.resolution.y;
-        }
-    }
-
     public override float[] leftEyeCameraNearPlane { 
         get {
             OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
-            float x = Mathf.Tan(desc.fov.x / 180.0f * Mathf.PI * 0.5f);
-            float y = Mathf.Tan(desc.fov.y / 180.0f * Mathf.PI * 0.5f);
 
-            // returns (l, t, r, b) of the near plane of the camera frustum when n = 1.
-            return new float[] { -x, y, x, -y };
+            return new float[] {
+                -Mathf.Tan(desc.fullFov.LeftFov / 180.0f * Mathf.PI),
+                Mathf.Tan(desc.fullFov.UpFov / 180.0f * Mathf.PI),
+                Mathf.Tan(desc.fullFov.RightFov / 180.0f * Mathf.PI),
+                -Mathf.Tan(desc.fullFov.DownFov / 180.0f * Mathf.PI),
+            };
         }
     }
 
@@ -121,42 +98,11 @@ public class AirVRProfile : AirVRProfileBase {
 		}
 	}
 
-	public override float[] videoRenderMeshVertices { 
-		get { 
-			return new float[] { 
-				-0.5f,  0.5f, 0.0f,
-				 0.5f,  0.5f, 0.0f,
-				-0.5f, -0.5f, 0.0f,
-				 0.5f, -0.5f, 0.0f 
-			};
-		}
-	}
-
-	public override float[] videoRenderMeshTexCoords { 
-		get { 
-			return new float[] {
-				0.0f, 1.0f,
-				1.0f, 1.0f,
-				0.0f, 0.0f,
-				1.0f, 0.0f
-			};
-		}
-	}
-
-	public override int[] videoRenderMeshIndices { 
-		get { 
-			return new int[] {
-				0, 1, 2, 2, 1, 3
-			};
-		}
-	}
-
 	public override float[] videoScale {
 		get {
-            OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
-            //var eyeTextureWidth = UnityEngine.XR.XRSettings.eyeTextureWidth;
-            //var eyeTextureHeight = UnityEngine.XR.XRSettings.eyeTextureHeight;
-            return new float[] { (float)videoWidth / 2 / desc.resolution.x, (float)videoHeight / desc.resolution.y };
+            //OVRDisplay.EyeRenderDesc desc = OVRManager.display.GetEyeRenderDesc(UnityEngine.XR.XRNode.LeftEye);
+            //return new float[] { (float)videoWidth / 2 / desc.resolution.x, (float)videoHeight / desc.resolution.y };
+            return new float[] { 1.0f, 1.0f };
 		}
 	}
 
@@ -168,7 +114,7 @@ public class AirVRProfile : AirVRProfileBase {
 
 	public override float delayToResumePlayback {
 		get {
-			return 4.0f;
+			return 1.5f;
 		}
 	}
 }
