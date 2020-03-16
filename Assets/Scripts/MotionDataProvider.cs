@@ -20,7 +20,6 @@ public class MotionDataProvider : MonoBehaviour {
     private class PredictionConfig {
         public string motionDataInputEndpoint;
         public bool useLoopbackForPredictedMotionOutput;
-        public string motionDataPerSec;
     }
 
     [Serializable]
@@ -51,14 +50,11 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     private AirVRProfileBase _profile;
-    private byte[] _cameraProjection;
-    private SensorDeviceManager _sensorDeviceManager;
+    private MotionData _motionData;
     private string _motionDataInputEndpoint;
     private PushSocket _zmqPushMotionData;
     private PushSocket _zmqPushProfile;
     private NetMQ.Msg _msgMotionData;
-    private List<byte[]> _motionData;
-    private bool _120HzMotionDataMode = true;
 
     private bool shouldReportProfile {
         get { return string.IsNullOrEmpty(_profile.profileReportEndpoint) == false; }
@@ -94,19 +90,16 @@ public class MotionDataProvider : MonoBehaviour {
                 config.useLoopbackForPredictedMotionOutput, 
                 1
             );
-            _120HzMotionDataMode = !config.motionDataPerSec.Equals("60");
         }
         else {
             _motionDataInputEndpoint = convertEndpoint("amqp://192.168.0.20:5555", false);
             predictedMotionOutputEndpoint = convertEndpoint(_motionDataInputEndpoint, false, 1);
         }
 
-        _sensorDeviceManager = gameObject.AddComponent<SensorDeviceManager>();
-
+        _motionData = new MotionData();
         _zmqPushMotionData = new PushSocket();
         _zmqPushProfile = new PushSocket();
         _msgMotionData = new NetMQ.Msg();
-        _motionData = new List<byte[]>();
 
         AirVRClient.MessageReceived += onAirVRMessageReceived; 
         
@@ -114,16 +107,7 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     void Start() {
-        var cameraProjection = _profile.leftEyeCameraNearPlane;
-        _cameraProjection = new byte[cameraProjection.Length * sizeof(float)];
-
-        for (int i = 0, pos = 0; i < cameraProjection.Length; i++) {
-            var value = BitConverter.GetBytes(cameraProjection[i]);
-            Array.Reverse(value);
-
-            Array.Copy(value, 0, _cameraProjection, pos, value.Length);
-            pos += value.Length;
-        }
+        _motionData.cameraProjection = _profile.leftEyeCameraNearPlane;
 
         _zmqPushMotionData.Connect(_motionDataInputEndpoint);
 
@@ -134,21 +118,25 @@ public class MotionDataProvider : MonoBehaviour {
         }
     }
 
-    void Update() {
-        byte[] motionData = _sensorDeviceManager.getNextMotionData();
-        while (motionData != null) {
-            _motionData.Add(motionData);
-            motionData = _sensorDeviceManager.getNextMotionData();
-        }
+    void LateUpdate() {
+        if (OVRManager.isHmdPresent == false) { return; }
 
-        if (_motionData.Count > 0) {
-            if (_120HzMotionDataMode) {
-                updateIn120HzMode();
-            }
-            else {
-                updateIn60HzMode();
-            }
-        }
+        long timestamp = 0;
+        ocs_BeginGatherInput(ref timestamp);
+
+        _motionData.timestamp = timestamp;
+        _motionData.leftEyePosition = getOvrNodePosition(XRNode.LeftEye, OVRPlugin.Node.EyeLeft);
+        _motionData.rightEyePosition = getOvrNodePosition(XRNode.RightEye, OVRPlugin.Node.EyeRight);
+        _motionData.headOrientation = getOvrNodeOrientation(XRNode.CenterEye, OVRPlugin.Node.EyeCenter);
+        _motionData.headAcceleration = getOvrNodeAcceleration(XRNode.Head, OVRPlugin.Node.Head);
+        _motionData.headAngularVelocity = getOvrNodeAngularVelocity(XRNode.Head, OVRPlugin.Node.Head);
+        _motionData.rightHandPosition = getOvrNodePosition(XRNode.RightHand, OVRPlugin.Node.HandRight);
+        _motionData.rightHandOrientation = getOvrNodeOrientation(XRNode.RightHand, OVRPlugin.Node.HandRight);
+        _motionData.rightHandAcceleration = getOvrNodeAcceleration(XRNode.RightHand, OVRPlugin.Node.HandRight);
+        _motionData.rightHandAngularVelocity = getOvrNodeAngularVelocity(XRNode.RightHand, OVRPlugin.Node.HandRight);
+
+        _motionData.CopyTo(ref _msgMotionData);
+        _zmqPushMotionData.TrySend(ref _msgMotionData, TimeSpan.Zero, false);
     }
 
     void OnDestroy() {
@@ -165,69 +153,44 @@ public class MotionDataProvider : MonoBehaviour {
         NetMQ.NetMQConfig.Cleanup(false);
     }
 
-    private void updateIn60HzMode() {
-        int lastIndex = _motionData.Count - 1;
-
-        long timestamp = 0;
-        ocs_BeginGatherInput(ref timestamp);
-
-        MotionData.SetTimestamp(_motionData[lastIndex], timestamp);
-        MotionData.SetOrientation(_motionData[lastIndex], InputTracking.GetLocalRotation(XRNode.CenterEye));
-
-        sendMotionData(_motionData[lastIndex]);
-
-        _motionData.Clear();
-    }
-
-    private void updateIn120HzMode() {
-        Quaternion baseOvrOrientation = InputTracking.GetLocalRotation(XRNode.CenterEye);
-        Quaternion baseSensorOrientation = MotionData.GetOrientation(_motionData[_motionData.Count - 1]);
-
-        for (int i = 0; i < _motionData.Count; i++) {
-            ocs_BeginGatherInputWithTimestamp(MotionData.GetTimestamp(_motionData[i]));
-
-            MotionData.SetOrientation(_motionData[i], baseOvrOrientation *
-                                                      Quaternion.Inverse(baseSensorOrientation) *
-                                                      MotionData.GetOrientation(_motionData[i]));
-
-            sendMotionData(_motionData[i]);
+    private Vector3 getOvrNodePosition(XRNode nodeType, OVRPlugin.Node ovrNodeType) {
+        var result = Vector3.zero;
+        if (OVRNodeStateProperties.GetNodeStatePropertyVector3(nodeType, NodeStatePropertyType.Position, ovrNodeType, OVRPlugin.Step.Render, out result)) {
+            return result;
         }
-
-        _motionData.Clear();
+        else {
+            return Vector3.zero;
+        }
     }
 
-    private void sendMotionData(byte[] data) {
-        var leftEyePosition = InputTracking.GetLocalPosition(XRNode.LeftEye);
-        var rightEyePosition = InputTracking.GetLocalPosition(XRNode.RightEye);
-        var rightHandPosition = OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch);
-        var rightHandOrientation = OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch);
+    private Quaternion getOvrNodeOrientation(XRNode nodeType, OVRPlugin.Node ovrNodeType) {
+        var result = Quaternion.identity;
+        if (OVRNodeStateProperties.GetNodeStatePropertyQuaternion(nodeType, NodeStatePropertyType.Orientation, ovrNodeType, OVRPlugin.Step.Render, out result)) {
+            return result;
+        }
+        else {
+            return Quaternion.identity;
+        }
+    }
 
-        float[] positions = {
-            leftEyePosition.x, leftEyePosition.y, leftEyePosition.z,
-            rightEyePosition.x, rightEyePosition.y, rightEyePosition.z,
-            rightHandPosition.x, rightHandPosition.y, rightHandPosition.z
-        };
-        float[] handOrientation = {
-            rightHandOrientation.x, rightHandOrientation.y, rightHandOrientation.z, rightHandOrientation.w
-        };
+    private Vector3 getOvrNodeAcceleration(XRNode nodeType, OVRPlugin.Node ovrNodeType) {
+        var result = Vector3.zero;
+        if (OVRNodeStateProperties.GetNodeStatePropertyVector3(nodeType, NodeStatePropertyType.Acceleration, ovrNodeType, OVRPlugin.Step.Render, out result)) {
+            return result;
+        }
+        else {
+            return Vector3.zero;
+        }
+    }
 
-        const int PositionLength = 4 * 3;
-        const int OrientationLength = 4 * 4;
-
-        _msgMotionData.InitPool(data.Length + 
-                                _cameraProjection.Length + 
-                                PositionLength * 3 + 
-                                OrientationLength);
-        int offset = 0;
-        Buffer.BlockCopy(data, 0, _msgMotionData.Data, offset, data.Length);                                offset += data.Length;
-        Buffer.BlockCopy(_cameraProjection, 0, _msgMotionData.Data, offset, _cameraProjection.Length);      offset += _cameraProjection.Length;
-
-        offset = MotionData.SetPosition(_msgMotionData.Data, offset, InputTracking.GetLocalPosition(XRNode.LeftEye));
-        offset = MotionData.SetPosition(_msgMotionData.Data, offset, InputTracking.GetLocalPosition(XRNode.RightEye));
-        offset = MotionData.SetPosition(_msgMotionData.Data, offset, OVRInput.GetLocalControllerPosition(OVRInput.Controller.RTouch));
-        MotionData.SetOrientation(_msgMotionData.Data, offset, OVRInput.GetLocalControllerRotation(OVRInput.Controller.RTouch));
-
-        _zmqPushMotionData.TrySend(ref _msgMotionData, TimeSpan.Zero, false);
+    private Vector3 getOvrNodeAngularVelocity(XRNode nodeType, OVRPlugin.Node ovrNodeType) {
+        var result = Vector3.zero;
+        if (OVRNodeStateProperties.GetNodeStatePropertyVector3(nodeType, NodeStatePropertyType.AngularVelocity, ovrNodeType, OVRPlugin.Step.Render, out result)) {
+            return result;
+        }
+        else {
+            return Vector3.zero;
+        }
     }
     
     // handle AirVRClientMessages
@@ -242,6 +205,182 @@ public class MotionDataProvider : MonoBehaviour {
                 
                 _zmqPushProfile.TrySendFrame(data);
             }
+        }
+    }
+
+    private class MotionData {
+        private byte[] _data;
+        private byte[] _temp;
+
+        public MotionData() {
+            _data = new byte[(int)Offset.Max];
+            _temp = new byte[4 * 4];
+        }
+
+        public long timestamp {
+            get { return getLong((int)Offset.Timestamp); }
+            set { setLong((int)Offset.Timestamp, value); }
+        }
+
+        public Vector3 leftEyePosition {
+            get { return getVector((int)Offset.LeftEyePosition); }
+            set { setVector((int)Offset.LeftEyePosition, value); }
+        }
+
+        public Vector3 rightEyePosition {
+            get { return getVector((int)Offset.RightEyePosition); }
+            set { setVector((int)Offset.RightEyePosition, value); }
+        }
+
+        public Quaternion headOrientation {
+            get { return getQuaternion((int)Offset.HeadOrientation); }
+            set { setQuaternion((int)Offset.HeadOrientation, value); }
+        }
+
+        public Vector3 headAcceleration {
+            get { return getVector((int)Offset.HeadAcceleration); }
+            set { setVector((int)Offset.HeadAcceleration, value); }
+        }
+
+        public Vector3 headAngularVelocity {
+            get { return getVector((int)Offset.HeadAngularVelocity); }
+            set { setVector((int)Offset.HeadAngularVelocity, value); }
+        }
+
+        public float[] cameraProjection {
+            get { return getProjection((int)Offset.CameraProjection); }
+            set { setProjection((int)Offset.CameraProjection, value); }
+        }
+
+        public Vector3 rightHandPosition {
+            get { return getVector((int)Offset.RightHandPosition); }
+            set { setVector((int)Offset.RightHandPosition, value); }
+        }
+
+        public Quaternion rightHandOrientation {
+            get { return getQuaternion((int)Offset.RightHandOrientation); }
+            set { setQuaternion((int)Offset.RightHandOrientation, value); }
+        }
+
+        public Vector3 rightHandAcceleration {
+            get { return getVector((int)Offset.RightHandAcceleration); }
+            set { setVector((int)Offset.RightHandAcceleration, value); }
+        }
+
+        public Vector3 rightHandAngularVelocity {
+            get { return getVector((int)Offset.RightHandAngularVelocity); }
+            set { setVector((int)Offset.RightHandAngularVelocity, value); }
+        }
+
+        public void CopyTo(ref NetMQ.Msg message) {
+            message.InitPool(_data.Length);
+
+            Buffer.BlockCopy(_data, 0, message.Data, 0, _data.Length);
+        }
+
+        private long getLong(int offset) {
+            Buffer.BlockCopy(_data, offset, _temp, 0, 8);
+            if (BitConverter.IsLittleEndian) {
+                Array.Reverse(_temp, 0, 8);
+            }
+            return BitConverter.ToInt64(_temp, 0);
+        }
+
+        private void setLong(int offset, long value) {
+            var bytes = BitConverter.GetBytes(value);
+            if (BitConverter.IsLittleEndian) {
+                Array.Reverse(bytes);
+            }
+            Buffer.BlockCopy(bytes, 0, _data, offset, bytes.Length);
+        }
+
+        private Vector3 getVector(int offset) {
+            Buffer.BlockCopy(_data, offset, _temp, 0, 4 * 3);
+
+            var result = Vector3.zero;
+            for (int i = 0; i < 3; i++) {
+                if (BitConverter.IsLittleEndian) {
+                    Array.Reverse(_temp, i * 4, 4);
+                }
+                // convert OpenGL to Unity
+                result[i] = (i == 2 ? -1.0f : 1.0f) * BitConverter.ToSingle(_temp, i * 4);
+            }
+            return result;
+        }
+
+        private void setVector(int offset, Vector3 value) {
+            for (int i = 0; i < 3; i++) {
+                // convert Unity to OpenGL
+                var bytes = BitConverter.GetBytes((i == 2 ? -1.0f : 1.0f) * value[i]);
+                if (BitConverter.IsLittleEndian) {
+                    Array.Reverse(bytes);
+                }
+                Buffer.BlockCopy(bytes, 0, _data, offset + i * 4, bytes.Length);
+            }
+        }
+
+        private Quaternion getQuaternion(int offset) {
+            Buffer.BlockCopy(_data, offset, _temp, 0, 4 * 4);
+
+            var result = Quaternion.identity;
+            for (int i = 0; i < 4; i++) {
+                if (BitConverter.IsLittleEndian) {
+                    Array.Reverse(_temp, i * 4, 4);
+                }
+                // convert OpenGL to Unity
+                result[i] = (i == 0 || i == 1 ? -1.0f : 1.0f) * BitConverter.ToSingle(_temp, i * 4);
+            }
+            return result;
+        }
+
+        private void setQuaternion(int offset, Quaternion value) {
+            for (int i = 0; i < 4; i++) {
+                // convert Unity to OpenGL
+                var bytes = BitConverter.GetBytes((i == 0 || i == 1 ? -1.0f : 1.0f) * value[i]);
+                if (BitConverter.IsLittleEndian) {
+                    Array.Reverse(bytes);
+                }
+                Buffer.BlockCopy(bytes, 0, _data, offset + i * 4, bytes.Length);
+            }
+        }
+
+        private float[] getProjection(int offset) {
+            Buffer.BlockCopy(_data, offset, _temp, 0, 4 * 4);
+
+            var result = new float[4];
+            for (int i = 0; i < 4; i++) {
+                if (BitConverter.IsLittleEndian) {
+                    Array.Reverse(_temp, i * 4, 4);
+                }
+                result[i] = BitConverter.ToSingle(_temp, i * 4);
+            }
+            return result;
+        }
+
+        private void setProjection(int offset, float[] value) {
+            for (int i = 0; i < 4; i++) {
+                var bytes = BitConverter.GetBytes(value[i]);
+                if (BitConverter.IsLittleEndian) {
+                    Array.Reverse(bytes);
+                }
+                Buffer.BlockCopy(bytes, 0, _data, offset + i * 4, bytes.Length);
+            }
+        }
+
+        private enum Offset : int {
+            Timestamp = 0,
+            LeftEyePosition = Timestamp + 8,
+            RightEyePosition = LeftEyePosition + 4 * 3,
+            HeadOrientation = RightEyePosition + 4 * 3,
+            HeadAcceleration = HeadOrientation + 4 * 4,
+            HeadAngularVelocity = HeadAcceleration + 4 * 3,
+            CameraProjection = HeadAngularVelocity + 4 * 3,
+            RightHandPosition = CameraProjection + 4 * 4,
+            RightHandOrientation = RightHandPosition + 4 * 3,
+            RightHandAcceleration = RightHandOrientation + 4 * 4,
+            RightHandAngularVelocity = RightHandAcceleration + 4 * 3,
+
+            Max = RightHandAngularVelocity + 4 * 3
         }
     }
 }
