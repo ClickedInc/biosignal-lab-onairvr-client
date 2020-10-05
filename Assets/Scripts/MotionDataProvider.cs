@@ -1,9 +1,6 @@
 ﻿using System;
 using System.IO;
-using System.Collections;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using NetMQ;
 using NetMQ.Sockets;
 using UnityEngine;
@@ -20,6 +17,7 @@ public class MotionDataProvider : MonoBehaviour {
     private class PredictionConfig {
         public string motionDataInputEndpoint;
         public bool useLoopbackForPredictedMotionOutput;
+        public bool bypassPrediction;
     }
 
     [Serializable]
@@ -50,6 +48,7 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     private AirVRProfileBase _profile;
+    private bool _bypassPrediction;
     private MotionData _motionData;
     private string _motionDataInputEndpoint;
     private PushSocket _zmqPushMotionData;
@@ -84,6 +83,7 @@ public class MotionDataProvider : MonoBehaviour {
             PredictionConfig config = new PredictionConfig();
             new PredictionConfigReader().ReadConfig(AirVRCamera.ConfigFile, config);
 
+            _bypassPrediction = config.bypassPrediction;
             _motionDataInputEndpoint = convertEndpoint(config.motionDataInputEndpoint, false);
             predictedMotionOutputEndpoint = convertEndpoint(
                 _motionDataInputEndpoint,
@@ -96,6 +96,8 @@ public class MotionDataProvider : MonoBehaviour {
             predictedMotionOutputEndpoint = convertEndpoint(_motionDataInputEndpoint, false, 1);
         }
 
+        if (_bypassPrediction) { return; }
+
         _motionData = new MotionData();
         _zmqPushMotionData = new PushSocket();
         _zmqPushProfile = new PushSocket();
@@ -107,6 +109,8 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     void Start() {
+        if (_bypassPrediction) { return; }
+
         _motionData.cameraProjection = _profile.leftEyeCameraNearPlane;
 
         _zmqPushMotionData.Connect(_motionDataInputEndpoint);
@@ -119,7 +123,7 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     void LateUpdate() {
-        if (OVRManager.isHmdPresent == false) { return; }
+        if (_bypassPrediction || OVRManager.isHmdPresent == false) { return; }
 
         long timestamp = 0;
         ocs_BeginGatherInput(ref timestamp);
@@ -140,6 +144,8 @@ public class MotionDataProvider : MonoBehaviour {
     }
 
     void OnDestroy() {
+        if (_bypassPrediction) { return; }
+
         _zmqPushMotionData.Close();
         _msgMotionData.Close();
         

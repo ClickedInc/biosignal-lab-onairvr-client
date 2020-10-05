@@ -1,9 +1,10 @@
 {
     "profiler": {
         "reportEndpoint": "amqp://192.168.1.10:5554",
-        "latencySimulation": 150
+        "latencySimulation": 0
     },
     "prediction": {
+        "bypassPrediction": true,
         "motionDataInputEndpoint": "amqp://192.168.1.10:5555",
         "useLoopbackForPredictedMotionOutput": true,
         "motionDataPerSec": "60"
