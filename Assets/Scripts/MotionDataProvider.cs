@@ -138,6 +138,7 @@ public class MotionDataProvider : MonoBehaviour {
         _motionData.rightHandOrientation = getOvrNodeOrientation(XRNode.RightHand, OVRPlugin.Node.HandRight);
         _motionData.rightHandAcceleration = getOvrNodeAcceleration(XRNode.RightHand, OVRPlugin.Node.HandRight);
         _motionData.rightHandAngularVelocity = getOvrNodeAngularVelocity(XRNode.RightHand, OVRPlugin.Node.HandRight);
+        _motionData.rightHandPrimaryButtonPress = getOvrRightHandPrimaryButtonPress();
 
         _motionData.CopyTo(ref _msgMotionData);
         _zmqPushMotionData.TrySend(ref _msgMotionData, TimeSpan.Zero, false);
@@ -197,6 +198,10 @@ public class MotionDataProvider : MonoBehaviour {
         else {
             return Vector3.zero;
         }
+    }
+
+    private bool getOvrRightHandPrimaryButtonPress() {
+        return OVRInput.Get(OVRInput.RawButton.A, OVRInput.Controller.RTouch);
     }
     
     // handle AirVRClientMessages
@@ -276,6 +281,11 @@ public class MotionDataProvider : MonoBehaviour {
         public Vector3 rightHandAngularVelocity {
             get { return getVector((int)Offset.RightHandAngularVelocity); }
             set { setVector((int)Offset.RightHandAngularVelocity, value); }
+        }
+
+        public bool rightHandPrimaryButtonPress {
+            get { return _data[(int)Offset.RightHandPrimaryButtonPress] > 0; }
+            set { _data[(int)Offset.RightHandPrimaryButtonPress] = (byte)(value ? 1 : 0); }
         }
 
         public void CopyTo(ref NetMQ.Msg message) {
@@ -385,8 +395,9 @@ public class MotionDataProvider : MonoBehaviour {
             RightHandOrientation = RightHandPosition + 4 * 3,
             RightHandAcceleration = RightHandOrientation + 4 * 4,
             RightHandAngularVelocity = RightHandAcceleration + 4 * 3,
+            RightHandPrimaryButtonPress = RightHandAngularVelocity + 4 * 3,
 
-            Max = RightHandAngularVelocity + 4 * 3
+            Max = RightHandPrimaryButtonPress + 1
         }
     }
 }
