@@ -7,16 +7,20 @@
 
  ***********************************************************/
 
+using System.IO;
 using UnityEngine;
 using UnityEngine.XR;
 
-public class AirVRClientAppManager : Singleton<AirVRClientAppManager>, AirVRClient.EventHandler {    
+public class AirVRClientAppManager : Singleton<AirVRClientAppManager>, AirVRClient.EventHandler {
+    public static string ConfigFile => Path.Combine(Application.persistentDataPath, "config.json");
+
     [SerializeField][Range(0.5f, 2.0f)] private float _renderScale = 1f;
 
     private AirVRCamera _camera;
     private GameObject _room;
     private Light _envLight;
     private AirVRRealWorldSpaceSetup _realWorldSpaceSetup;
+    private AXRClientConfig _devConfig;
 
     private bool _lastUserPresent = false;
 
@@ -42,31 +46,6 @@ public class AirVRClientAppManager : Singleton<AirVRClientAppManager>, AirVRClie
 
         if (Config.FirstPlay) {            
             AirVRClientUIManager.Instance.GuidePanel.StartGuide();
-        }
-    }
-
-    private void Update() {
-        if (Input.GetKeyDown(KeyCode.Escape)) {
-            if (IsConnecting) {
-                OnDisconnected();
-            }
-        }
-
-        // TODO remove real world space setup
-        if (OVRInput.GetDown(OVRInput.Button.SecondaryThumbstick)) {
-            if (_realWorldSpaceSetup == null) {
-                _realWorldSpaceSetup = new GameObject("RealWorldSpaceSetup").AddComponent<AirVRRealWorldSpaceSetup>();
-                _realWorldSpaceSetup.transform.position = Vector3.zero;
-                _realWorldSpaceSetup.transform.rotation = Quaternion.identity;
-
-                _room.SetActive(false);
-            }
-            else {
-                Destroy(_realWorldSpaceSetup.gameObject);
-                _realWorldSpaceSetup = null;
-
-                _room.SetActive(true);
-            }
         }
     }
 
@@ -110,7 +89,19 @@ public class AirVRClientAppManager : Singleton<AirVRClientAppManager>, AirVRClie
         IsConnecting = true;
         Notification.DisplayConnecting();
 
+        readDevConfig();
+
         _camera.profile.userID = userID.ToString();
+        _camera.profile.videoMinBitrate = _devConfig.videoBitrate.min;
+        _camera.profile.videoStartBitrate = _devConfig.videoBitrate.start;
+        _camera.profile.videoMaxBitrate = _devConfig.videoBitrate.max;
+        _camera.profile.videoFrameRate = _devConfig.videoFramerate;
+        _camera.profile.videoResolution = (_devConfig.videoResolution.width, _devConfig.videoResolution.height);
+
+        _camera.profile.profiler = new AirVRProfileBase.ProfilerSettings {
+            Flags = _devConfig.profiler.flags,
+            Filename = _devConfig.profiler.filename
+        };
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         AirVRClient.Connect(address, port);
@@ -138,6 +129,15 @@ public class AirVRClientAppManager : Singleton<AirVRClientAppManager>, AirVRClie
         IsConnecting = false;
     }
 
+    private void readDevConfig() {
+        if (Application.isEditor == false && File.Exists(ConfigFile)) {
+            _devConfig = JsonUtility.FromJson<AXRClientConfig>(File.ReadAllText(ConfigFile));
+        }
+        else {
+            _devConfig = new AXRClientConfig();
+        }
+    }
+
     // implements AirVRClient.EventHandler
     public void AirVRClientFailed(string reason) { }
 
@@ -159,9 +159,9 @@ public class AirVRClientAppManager : Singleton<AirVRClientAppManager>, AirVRClie
     }
 
     public void AirVRClientUserDataReceived(byte[] userData) {
-        Debug.Log("User data received: " + userData.Length);
-        
-        // pong received data back to the server
-        AirVRClient.SendUserData(userData);
+        // pong with received data to the server
+        var data = string.Format("pong from {0} by {1}", System.Environment.MachineName, System.Text.Encoding.UTF8.GetString(userData));
+
+        AirVRClient.SendUserData(System.Text.Encoding.UTF8.GetBytes(data));
     }
 }

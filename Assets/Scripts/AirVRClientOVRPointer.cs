@@ -39,11 +39,11 @@ public class AirVRClientOVRPointer : MonoBehaviour
     public OVRInput.Controller controller {
         get {
             OVRInput.Controller controllers = OVRInput.GetConnectedControllers();
-            var right = AirVROVRInputHelper.ParseController(OVRInput.Controller.RTouch);
+            var right = OVRInput.Controller.RTouch;
             if (AirVROVRInputHelper.IsConnected(right)) {
                 return right;
             }
-            var left = AirVROVRInputHelper.ParseController(OVRInput.Controller.LTouch);
+            var left = OVRInput.Controller.LTouch;
             if (AirVROVRInputHelper.IsConnected(left)) {
                 return left;
             }
@@ -65,10 +65,10 @@ public class AirVRClientOVRPointer : MonoBehaviour
 
         Transform newRayTransform;
         if (isControllerConnected) {
-            if (controller == AirVROVRInputHelper.ParseController(OVRInput.Controller.RTouch)) {
+            if (controller == OVRInput.Controller.RTouch) {
                 newRayTransform = _rightHandAnchor;
             }
-            else if (controller == AirVROVRInputHelper.ParseController(OVRInput.Controller.LTouch)) {
+            else if (controller == OVRInput.Controller.LTouch) {
                 newRayTransform = _leftHandAnchor;
             }
             else {
