@@ -86,7 +86,6 @@ public abstract class AirVRProfileBase {
 
     [SerializeField] private string ProfileReportEndpoint;
     [SerializeField] private string MotionOutputEndpoint;
-    [SerializeField] private int LatencySimulation;
 
 #pragma warning restore CS0414
 
@@ -249,7 +248,6 @@ public abstract class AirVRProfileBase {
         profilerConfig = new ProfilerConfig();
         if (new ProfilerConfigReader().ReadConfig(configPath, profilerConfig)) {
             ProfileReportEndpoint = profilerConfig.reportEndpoint;
-            LatencySimulation = profilerConfig.latencySimulation;
         }
 
         return this;
@@ -351,7 +349,6 @@ public abstract class AirVRProfileBase {
     [Serializable]
     public class ProfilerConfig {
         public string reportEndpoint;
-        public int latencySimulation;
     }
 
     [Serializable]

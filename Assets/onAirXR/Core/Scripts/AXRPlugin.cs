@@ -541,10 +541,7 @@ public class AXRClientPlugin {
 #if UNITY_EDITOR || UNITY_STANDALONE
             return 60.0f;
 #elif UNITY_ANDROID
-            AndroidJavaClass jc = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-            AndroidJavaObject activity = jc.GetStatic<AndroidJavaObject>("currentActivity");
-            AndroidJavaObject display = activity.Call<AndroidJavaObject>("getSystemService", "window").Call<AndroidJavaObject>("getDefaultDisplay");
-            return display.Call<float>("getRefreshRate");
+            return OVRManager.display.appFramerate;
 #elif UNITY_IOS
                 return ocs_DeviceRefreshRate();
 #else
